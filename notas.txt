@@ -1,0 +1,89 @@
+Bitácora de Cambios de Código - Proyecto Avante
+-----------------------------------------------
+
+[06/03/2026]
+- Archivo: .env
+  Cambio: Se modificó DB_HOST de 'localhost' a '127.0.0.1'.
+  Motivo: Forzar la conexión IPv4 de Node.js a MySQL y evitar errores de conexión (ECONNREFUSED) en scripts independientes.
+
+- Archivo: routes/usuarios.js
+  Cambio: Se agregó la ruta 'router.post('/', UsuarioController.crear);'.
+  Motivo: Conectar el endpoint del backend para permitir la creación de nuevos usuarios desde el frontend.
+
+- Archivo: frontend/src/components/FormularioSolicitud.jsx
+  Cambio: Se reemplazaron los Checkbox por Radio Buttons en "Tipos de Soporte".
+  Motivo: El documento de requerimientos establecía que este campo debía ser de selección única.
+
+- Archivo: frontend/index.html y frontend/public/logo.png
+  Cambio: Se modificó el tag <link rel="icon"> y se añadió el logo a la carpeta public.
+  Motivo: Reemplazar el ícono genérico de Vite por el logo corporativo de Avante en la pestaña del navegador (Favicon).
+
+- Archivo: frontend/src/components/Dashboard.jsx
+  Cambio: Se añadió ancho máximo y ocultamiento de texto (ellipsis) a la columna de Correlativo. Adicionalmente, se configuró el scroll horizontal general de la tabla con anchos fijos mínimos para el resto de columnas.
+  Motivo: Evitar que textos largos y componentes se superpongan a otras columnas cuando el usuario divide la pantalla o usa monitores pequeños.
+
+- Archivo: controllers/SolicitudController.js
+  Cambio: Se ajustaron las posiciones horizontales (coordenadas X) en la librería PDFKit y se corrigió el análisis de "Tipos de Soporte".
+  Motivo: Garantizar que textos largos como la "Razón Social" o el "N° de Cuenta" tengan espacio sin chocar, y que los Radio Buttons (Soportes) marquen su respectiva 'X' en la impresión de la solicitud.
+
+- Archivo: frontend/src/components/FormularioSolicitud.jsx
+  Cambio: Se agregó lógica para renderizar y permitir la descarga de `solicitud.comprobantePago` en la sección "Documentos Adjuntos".
+  Motivo: El sistema permitía subir el comprobante de pago al cambiar a estatus "Pagado", pero no existía un botón en la interfaz para que el usuario o el solicitante lo visualizara después.
+
+- Archivo: routes/solicitudes.js
+  Cambio: Se configuró `multer.diskStorage` para guardar los nombres de archivos conservando su extensión original.
+  Motivo: Anteriormente los archivos se guardaban sin extensión (formato temporal), lo que impedía que el navegador los abriera correctamente.
+
+- Archivo: controllers/SolicitudController.js
+  Cambio: Se implementó la función `actualizar` para permitir la edición de solicitudes.
+  Motivo: El frontend permitía editar pero el backend no tenía la ruta para guardar los cambios, lo que generaba un error al intentar modificar una solicitud (ej. cambiar tipo de pago).
+
+- Archivo: routes/solicitudes.js
+  Cambio: Se registró la ruta `PUT /solicitudes/:id` mapeada a la función `actualizar`.
+  Motivo: Habilitar la comunicación entre el frontend y el backend para la edición de solicitudes.
+
+- Archivo: frontend/src/components/FormularioSolicitud.jsx
+  Cambio: Se agregaron alertas visuales (`Alert`) para motivos de devolución/rechazo, se habilitó la visualización de comentarios en el `Timeline` y se implementó un `Modal.confirm` para capturar motivos obligatorios.
+  Motivo: El usuario no podía ver el porqué de una devolución en el historial y los administradores no tenían una forma estandarizada de registrar el motivo.
+
+[07/03/2026]
+- Archivo: models/Usuario.js y controllers/authController.js
+  Cambio: Se implementó el campo `debeCambiarPassword` y la funcionalidad de cambio de contraseña obligatorio.
+  Motivo: Garantizar que los usuarios creados por el administrador cambien su clave inicial por seguridad.
+
+- Archivo: frontend/src/App.jsx y frontend/src/components/CambiarPassword.jsx
+  Cambio: Se creó un componente dedicado para el cambio de clave y se configuró una ruta protegida con redirección automática.
+  Motivo: Forzar al usuario a permanecer en la pantalla de cambio de clave si aún no ha actualizado su contraseña inicial.
+
+- Archivo: frontend/src/components/Maestros.jsx
+  Cambio: Se sincronizó el nombre del campo `direccion` con `direccionFiscal` (modelo Proveedor).
+  Motivo: La creación de proveedores fallaba porque el nombre enviado desde el formulario no coincidía con el esperado por la base de datos.
+
+- Archivo: server.js
+  Cambio: Se estableció `sequelize.sync({ alter: true })`.
+  Motivo: Asegurar que los cambios en la estructura de las tablas (como la nueva columna de password) se apliquen automáticamente a la base de datos.
+
+- Archivo: controllers/UsuarioController.js
+  Cambio: Se aseguró que la creación de usuarios desde el panel administrativo asigne `debeCambiarPassword: true`.
+  Motivo: Consistencia en el flujo de seguridad, permitiendo que tanto el registro público como el administrativo activen el cambio obligatorio.
+
+[10/03/2026]
+- Archivo: controllers/UsuarioController.js y routes/usuarios.js
+  Cambio: Se implementó la ruta y el método `resetPassword` para administradores.
+  Motivo: Permitir el rescate de cuentas bloqueadas o perdidas, asignando una clave temporal (password123) y forzando el cambio al entrar.
+
+- Archivo: frontend/src/components/Maestros.jsx
+  Cambio: Se agregó un botón de "llave" 🔑 en la gestión de usuarios para disparar el reseteo administrativo.
+  Motivo: Interfaz visual para que el administrador gestione el olvido de contraseñas de su equipo.
+
+- Archivo: frontend/src/components/FormularioSolicitud.jsx
+  Cambio: Se añadió un botón "Autocompletar Prueba" 🪄 (solo en modo creación).
+  Motivo: Agilizar las pruebas de demostración para los jefes de departamento, rellenando campos obligatorios con un solo clic.
+
+- Archivo: reset_password.js y controllers/UsuarioController.js
+  Cambio: Se unificó la contraseña por defecto a "password123".
+  Motivo: Simplificar las pruebas iniciales y garantizar que el script de rescate coincida con la lógica del controlador.
+
+- Archivo: models/Usuario.js y frontend (varios)
+  Cambio: Se implementó un nuevo rol "Gestor" con permisos administrativos limitados.
+  Motivo: Permitir un perfil que gestione maestros y reportes, y pueda "Devolver" solicitudes, pero sin poder de aprobación/rechazo ni gestión de usuarios.

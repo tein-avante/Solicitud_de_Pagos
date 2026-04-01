@@ -1,0 +1,45 @@
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5;
+  color: #000000;
+  font-weight: 450; /* Slightly bolder than 400 for better definition */
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.dashboard, .formulario-solicitud {
+  padding: 24px;
+}
+
+@media print {
+  /* Ocultar elementos que no deben salir en la impresión */
+  .ant-menu, .ant-layout-sider, .ant-btn, .ant-modal, .ant-upload-hint {
+    display: none !important;
+  }
+  
+  /* Ajustar el layout para impresión */
+  .ant-layout, .ant-layout-content {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Ocultar barras de desplazamiento y sombras */
+  body, html {
+    overflow: visible !important;
+    background: white !important;
+  }
+  
+  .ant-card {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
