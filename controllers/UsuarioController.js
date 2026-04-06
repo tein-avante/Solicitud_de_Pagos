@@ -1,5 +1,6 @@
-const bcrypt = require('bcrypt');
 const Usuario = require('../models/Usuario');
+const sistemaService = require('../services/sistemaService');
+
 
 class UsuarioController {
     async listar(req, res) {
@@ -75,6 +76,10 @@ class UsuarioController {
 
 
             res.status(201).json({ mensaje: 'Usuario creado', id: nuevoUsuario.id });
+
+            // Incrementar contador de operaciones
+            await sistemaService.incrementarOperaciones();
+
         } catch (error) {
             console.error('[USUARIO CREATE ERROR]:', error);
             res.status(500).json({ error: 'Error al crear usuario: ' + error.message });
@@ -117,6 +122,10 @@ class UsuarioController {
             await usuario.update(updates);
 
             res.json({ mensaje: 'Usuario actualizado', id: usuario.id });
+
+            // Incrementar contador de operaciones
+            await sistemaService.incrementarOperaciones();
+
         } catch (error) {
             res.status(500).json({ error: 'Error al actualizar usuario' });
         }
@@ -138,6 +147,10 @@ class UsuarioController {
 
             await usuario.destroy();
             res.json({ mensaje: 'Usuario eliminado' });
+
+            // Incrementar contador de operaciones
+            await sistemaService.incrementarOperaciones();
+
         } catch (error) {
             res.status(500).json({ error: 'Error al eliminar usuario' });
         }

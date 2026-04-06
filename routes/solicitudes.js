@@ -42,5 +42,7 @@ router.delete('/:id/soportes/:index', SolicitudController.eliminarSoporte);
 router.get('/reporte/pendientes', SolicitudController.reporteRelacionPendientes);
 router.get('/reporte/pagados', SolicitudController.reporteRelacionPagados);
 router.get('/exportar/datos', SolicitudController.exportarDatos);
+router.get('/sistema/info', SolicitudController.obtenerSistemaInfo);
 
 module.exports = router;
+

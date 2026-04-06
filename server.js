@@ -12,6 +12,8 @@ const sequelize = require('./config/database');
 const cors = require('cors');
 const path = require('path');
 const { initSocket } = require('./socket');
+const sistemaService = require('./services/sistemaService');
+
 
 // Importación de Rutas de la API
 const authRoutes = require('./routes/auth');
@@ -131,6 +133,10 @@ async function start(retries = 5) {
 
             // Inicializar WebSocket para notificaciones en tiempo real
             initSocket(server);
+
+            // Inicializar configuración del sistema (Versión y Contador)
+            await sistemaService.inicializar();
+
 
             // --- MECANISMO DE KEEP-ALIVE PARA LA BASE DE DATOS ---
             // Realiza un ping a la base de datos cada 10 minutos para evitar que MySQL 

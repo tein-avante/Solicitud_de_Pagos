@@ -83,6 +83,8 @@ const Dashboard = () => {
   const [filtroEstatus, setFiltroEstatus] = useState('');
   const [proveedoresLista, setProveedoresLista] = useState([]);
   const [deptsLista, setDeptsLista] = useState([]);
+  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.5', operaciones: null });
+
 
   const [form] = Form.useForm();
   const navigate = useNavigate();
@@ -91,12 +93,22 @@ const Dashboard = () => {
   // Obtener datos del usuario logueado
   const storedUser = localStorage.getItem('usuario');
   const usuario = storedUser ? JSON.parse(storedUser) : null;
-
   useEffect(() => {
     cargarSolicitudes(1, 10);
     cargarEstadisticas();
     cargarAuxiliares();
+    cargarSistemaInfo();
   }, []);
+
+  const cargarSistemaInfo = async () => {
+    try {
+      const res = await api.get('/solicitudes/sistema/info');
+      setSistemaInfo(res.data);
+    } catch (e) {
+      console.warn('Error al cargar info del sistema');
+    }
+  };
+
 
   const cargarAuxiliares = async () => {
     try {
@@ -581,10 +593,21 @@ const Dashboard = () => {
                 />
               </Tooltip>
             )}
-            <Button type="primary" danger icon={<LogoutOutlined />} onClick={handleLogout}>Salir</Button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Button type="primary" danger icon={<LogoutOutlined />} onClick={handleLogout}>Salir</Button>
+              <div style={{ marginTop: 4, textAlign: 'right', lineHeight: '1.2' }}>
+                <Text type="secondary" style={{ fontSize: '10px', display: 'block' }}>v{sistemaInfo.version}</Text>
+                {usuario?.rol?.toLowerCase() === 'administrador' && sistemaInfo.operaciones && (
+                  <Text type="secondary" style={{ fontSize: '10px', color: '#888' }}>
+                    🔢 {Number(sistemaInfo.operaciones).toLocaleString()} ops
+                  </Text>
+                )}
+              </div>
+            </div>
           </Space>
         </Space>
       </div>
+
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         {[

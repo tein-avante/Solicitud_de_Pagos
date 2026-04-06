@@ -19,6 +19,8 @@ const fs = require('fs');
 const sequelize = require('../config/database');
 const path = require('path');
 const bwipjs = require('bwip-js');
+const sistemaService = require('../services/sistemaService');
+
 
 const parseJsonArray = (val) => {
   let p = val;
@@ -162,6 +164,10 @@ class SolicitudController {
         mensaje: 'Solicitud creada exitosamente',
         solicitud: nuevaSolicitud
       });
+
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
+
     } catch (error) {
       console.error('[CREATION ERROR]:', error);
       res.status(500).json({ error: 'Error en el servidor', detalles: error.message });
@@ -255,6 +261,9 @@ class SolicitudController {
       solicitudJson.procesadoPor = procesadoPor;
 
       res.json(solicitudJson);
+
+      // Incrementar contador de operaciones al visualizar una solicitud
+      await sistemaService.incrementarOperaciones();
     } catch (error) {
       console.error('[FETCH ERROR]:', error);
       res.status(500).json({ error: 'Error en el servidor' });
@@ -646,6 +655,10 @@ class SolicitudController {
         solicitud,
         debug_recibido: { estatus, motivo, comentario }
       });
+
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
+
     } catch (error) {
       console.error('[STATUS UPDATE ERROR]:', error);
       res.status(500).json({ error: 'Error en el servidor' });
@@ -723,8 +736,12 @@ class SolicitudController {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error al generar PDF', details: error.message });
       }
+    } finally {
+      // Incrementar contador de operaciones (Cualquier descarga de PDF cuenta como operación)
+      await sistemaService.incrementarOperaciones();
     }
   }
+
 
   /**
    * Dibuja el contenido del formulario en un documento PDFKit (Reutilizable)
@@ -1394,8 +1411,12 @@ class SolicitudController {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error al exportar datos' });
       }
+    } finally {
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
     }
   }
+
 
   /**
    * Agrega un comentario (Chat interno) a una solicitud
@@ -1427,6 +1448,10 @@ class SolicitudController {
       await solicitud.save();
 
       res.json({ mensaje: 'Comentario agregado' });
+
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
+
     } catch (error) {
       res.status(500).json({ error: 'Error al comentar' });
     }
@@ -1616,8 +1641,12 @@ class SolicitudController {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error al generar reporte de pendientes' });
       }
+    } finally {
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
     }
   }
+
 
   /**
    * Genera el reporte especial "RELACIÓN DE PAGOS REALIZADOS"
@@ -1801,8 +1830,12 @@ class SolicitudController {
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error al generar reporte de pagos' });
       }
+    } finally {
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
     }
   }
+
   /**
    * Actualiza los datos de una solicitud existente (Solo si está en estado editable)
    */
@@ -1883,6 +1916,10 @@ class SolicitudController {
       await solicitud.save();
 
       res.json({ mensaje: 'Solicitud actualizada exitosamente', solicitud });
+
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
+
     } catch (error) {
       console.error('[UPDATE ERROR]:', error);
       res.status(500).json({ error: 'Error al actualizar la solicitud', detalles: error.message });
@@ -1967,11 +2004,36 @@ class SolicitudController {
       await solicitud.save();
 
       res.json({ mensaje: 'Soporte eliminado correctamente', solicitud });
+
+      // Incrementar contador de operaciones
+      await sistemaService.incrementarOperaciones();
     } catch (error) {
       console.error('[DELETE SUPPORT ERROR]:', error);
       res.status(500).json({ error: 'Error al eliminar el soporte' });
     }
   }
+
+  /**
+   * Obtiene la información de configuración del sistema (Versión y Contador)
+   */
+  async obtenerSistemaInfo(req, res) {
+    try {
+      const info = await sistemaService.obtenerInfo();
+      const esAdmin = req.usuario.rol?.toLowerCase() === 'administrador';
+      
+      // Solo el administrador puede ver las operaciones
+      const data = {
+        version: info.version || '2.5',
+        operaciones: esAdmin ? (info.operaciones || '250') : null
+      };
+      
+      res.json(data);
+    } catch (error) {
+      console.error('[SISTEMA INFO ERROR]:', error);
+      res.status(500).json({ error: 'Error al obtener información del sistema' });
+    }
+  }
 }
+
 
 module.exports = new SolicitudController();
