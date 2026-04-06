@@ -76,14 +76,15 @@ const Dashboard = () => {
 
   // Estados para Reportes con Filtro de Fecha
   const [modalReporte, setModalReporte] = useState(false);
-  const [tipoReporteActual, setTipoReporteActual] = useState(null); // 'pendientes' | 'pagados' | 'xlsx' | 'pdf'
+  const [tipoReporteActual, setTipoReporteActual] = useState(null); // 'relacion' | 'xlsx' | 'pdf'
   const [rangoFechas, setRangoFechas] = useState([null, null]);
+  const [estatusReporte, setEstatusReporte] = useState(['Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
   const [filtroProveedor, setFiltroProveedor] = useState(null);
   const [filtroDepartamento, setFiltroDepartamento] = useState(null);
   const [filtroEstatus, setFiltroEstatus] = useState('');
   const [proveedoresLista, setProveedoresLista] = useState([]);
   const [deptsLista, setDeptsLista] = useState([]);
-  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.5', operaciones: null });
+  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.7', operaciones: null });
 
 
   const [form] = Form.useForm();
@@ -305,62 +306,31 @@ const Dashboard = () => {
   };
 
   /**
-   * ACCIÓN: Generar reporte de Relación de Pendientes (Formato especial)
+   * ACCIÓN: Generar reporte de Relación de Solicitudes (Unificado)
    */
-  const handleReportePendientes = () => {
-    setTipoReporteActual('pendientes');
+  const handleReporteRelacion = () => {
+    setTipoReporteActual('relacion');
+    // Pre-seleccionar todos por defecto
+    setEstatusReporte(['Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
     setModalReporte(true);
   };
 
-  const ejecutarReportePendientes = async (desde, hasta) => {
-    try {
-      setLoading(true);
-      console.log('Iniciando descarga de reporte de pendientes con filtro...', { desde, hasta });
-
-      const res = await api.get(`/solicitudes/reporte/pendientes?desde=${desde}&hasta=${hasta}`, { responseType: 'blob' });
-
-      const blob = new Blob([res.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Relacion_Pendientes_${desde}_a_${hasta}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-
-      // Limpieza
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-      }, 100);
-
-      message.success('Reporte generado y descargado correctamente');
-    } catch (e) {
-      console.error('Error en ejecutarReportePendientes:', e);
-      message.error(`Error al generar el reporte: ${e.message || 'Error de red'}`);
-    } finally {
-      setLoading(false);
+  const ejecutarReporteRelacion = async (desde, hasta) => {
+    if (!estatusReporte || estatusReporte.length === 0) {
+      return message.warning('Debe seleccionar al menos un estatus para el reporte');
     }
-  };
-
-  /**
-   * ACCIÓN: Generar reporte de Relación de Pagos Realizados (Formato especial)
-   */
-  const handleReportePagados = () => {
-    setTipoReporteActual('pagados');
-    setModalReporte(true);
-  };
-
-  const ejecutarReportePagados = async (desde, hasta) => {
     try {
       setLoading(true);
-      console.log('Iniciando descarga de reporte de pagos realizados con filtro...', { desde, hasta });
-      const res = await api.get(`/solicitudes/reporte/pagados?desde=${desde}&hasta=${hasta}`, { responseType: 'blob' });
+      console.log('Iniciando descarga de reporte de relacion con filtro...', { desde, hasta, estatus: estatusReporte });
+      
+      const estatusQuery = estatusReporte.join(',');
+      const res = await api.get(`/solicitudes/reporte/relacion?desde=${desde}&hasta=${hasta}&estatus=${estatusQuery}`, { responseType: 'blob' });
 
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Relacion_Pagos_${desde}_a_${hasta}.pdf`);
+      link.setAttribute('download', `Relacion_Solicitudes_${desde}_a_${hasta}.pdf`);
       document.body.appendChild(link);
       link.click();
 
@@ -369,10 +339,10 @@ const Dashboard = () => {
         document.body.removeChild(link);
       }, 100);
 
-      message.success('Reporte de pagos generado correctamente');
+      message.success('Reporte generado correctamente');
     } catch (e) {
-      console.error('Error en ejecutarReportePagados:', e);
-      message.error(`Error al generar el reporte de pagos: ${e.message || 'Error de red'}`);
+      console.error('Error en ejecutarReporteRelacion:', e);
+      message.error(`Error al generar el reporte: ${e.message || 'Error de red'}`);
     } finally {
       setLoading(false);
     }
@@ -388,10 +358,8 @@ const Dashboard = () => {
 
     setModalReporte(false);
 
-    if (tipoReporteActual === 'pendientes') {
-      await ejecutarReportePendientes(desde, hasta);
-    } else if (tipoReporteActual === 'pagados') {
-      await ejecutarReportePagados(desde, hasta);
+    if (tipoReporteActual === 'relacion') {
+      await ejecutarReporteRelacion(desde, hasta);
     } else {
       await ejecutarExportarMasivo(tipoReporteActual, desde, hasta);
     }
@@ -690,12 +658,8 @@ const Dashboard = () => {
             </Button>
             {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
               <Space>
-                <Button icon={<PrinterOutlined />} onClick={handleReportePendientes}
- style={{ backgroundColor: '#1b4f72', color: 'white' }}>
-                  Relación Pendientes
-                </Button>
-                <Button icon={<PrinterOutlined />} onClick={handleReportePagados} style={{ backgroundColor: '#2e7d32', color: 'white' }}>
-                  Relación Pagos
+                <Button icon={<PrinterOutlined />} onClick={handleReporteRelacion} style={{ backgroundColor: '#1b4f72', color: 'white' }}>
+                  Relación de Solicitudes
                 </Button>
                 <Button icon={<ExportOutlined />} onClick={() => handleExportar('xlsx')}>Excel</Button>
                 <Button icon={<ExportOutlined />} onClick={() => handleExportar('pdf')}>PDF</Button>
@@ -837,10 +801,7 @@ const Dashboard = () => {
       </Modal>
       {/* MODAL: Selección de Rango para Reportes */}
       <Modal
-        title={`Seleccionar Rango de Fechas - ${tipoReporteActual === 'pendientes' ? 'Relación Pendientes' :
-          tipoReporteActual === 'pagados' ? 'Relación Pagos' :
-            'Reporte General (' + (tipoReporteActual?.toUpperCase()) + ')'
-          }`}
+        title={tipoReporteActual === 'relacion' ? 'Relación de Solicitudes' : `Seleccionar Rango de Fechas - Reporte General (${tipoReporteActual?.toUpperCase()})`}
         open={modalReporte}
         onOk={generarReporteConFiltro}
         onCancel={() => {
@@ -852,6 +813,28 @@ const Dashboard = () => {
         destroyOnClose
       >
         <div style={{ padding: '20px 0' }}>
+          {tipoReporteActual === 'relacion' && (
+            <div style={{ marginBottom: 20 }}>
+              <p>Filtrar por Estatus (puede seleccionar varios o eliminarlos):</p>
+              <Select
+                mode="multiple"
+                allowClear
+                style={{ width: '100%' }}
+                placeholder="Seleccione los estatus que desea incluir en el reporte"
+                value={estatusReporte}
+                onChange={(values) => setEstatusReporte(values)}
+              >
+                <Select.Option value="Pendiente">Pendiente</Select.Option>
+                <Select.Option value="Autorizado">Autorizado</Select.Option>
+                <Select.Option value="Aprobado">Aprobado</Select.Option>
+                <Select.Option value="Pagado">Pagado</Select.Option>
+                <Select.Option value="Cerrado">Cerrado</Select.Option>
+                <Select.Option value="Devuelto">Devuelto</Select.Option>
+                <Select.Option value="Rechazado">Rechazado</Select.Option>
+                <Select.Option value="Anulado">Anulado</Select.Option>
+              </Select>
+            </div>
+          )}
           <p>Indique el rango de fechas para filtrar el reporte:</p>
           <DatePicker.RangePicker
             style={{ width: '100%' }}

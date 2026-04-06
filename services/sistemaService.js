@@ -12,7 +12,7 @@ class SistemaService {
         try {
             const [version, versionCreated] = await SistemaConfig.findOrCreate({
                 where: { clave: 'version' },
-                defaults: { valor: '2.5' }
+                defaults: { valor: '2.7' }
             });
 
             const [operaciones, opsCreated] = await SistemaConfig.findOrCreate({

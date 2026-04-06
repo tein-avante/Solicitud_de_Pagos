@@ -32,17 +32,15 @@ router.use(auth);
 router.post('/', upload.array('soportes'), SolicitudController.crear);
 router.get('/', SolicitudController.listar);
 router.get('/estadisticas', SolicitudController.obtenerEstadisticas);
+router.get('/reporte/relacion', SolicitudController.reporteRelacionPersonalizada);
+router.get('/exportar/datos', SolicitudController.exportarDatos);
+router.get('/sistema/info', SolicitudController.obtenerSistemaInfo);
+router.get('/:id/pdf', (req, res) => SolicitudController.generarPDF(req, res));
+router.post('/:id/comentarios', SolicitudController.agregarComentario);
+router.delete('/:id/soportes/:index', SolicitudController.eliminarSoporte);
 router.get('/:id', SolicitudController.obtenerPorId);
 router.put('/:id', SolicitudController.actualizar);
 router.put('/:id/estatus', upload.single('comprobante'), SolicitudController.cambiarEstatus);
 router.patch('/:id/estatus', upload.single('comprobante'), SolicitudController.cambiarEstatus);
-router.get('/:id/pdf', (req, res) => SolicitudController.generarPDF(req, res));
-router.post('/:id/comentarios', SolicitudController.agregarComentario);
-router.delete('/:id/soportes/:index', SolicitudController.eliminarSoporte);
-router.get('/reporte/pendientes', SolicitudController.reporteRelacionPendientes);
-router.get('/reporte/pagados', SolicitudController.reporteRelacionPagados);
-router.get('/exportar/datos', SolicitudController.exportarDatos);
-router.get('/sistema/info', SolicitudController.obtenerSistemaInfo);
 
 module.exports = router;
-

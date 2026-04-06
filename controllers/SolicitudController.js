@@ -1332,10 +1332,11 @@ class SolicitudController {
         return res.send(buffer);
 
       }
-      // EXPORTACIÓN A PDF (TABLA LANDSCAPE CON COLORES)
+
+      // EXPORTACIÓN A PDF (DIBUJO MANUAL - MANEJO CORRECTO DE PAGINACIÓN)
       else if (formato === 'pdf') {
-        const PDFTable = require('pdfkit-table');
-        const doc = new PDFTable({ margin: 20, size: 'A4', layout: 'landscape' });
+        const PDFDocument = require('pdfkit');
+        const doc = new PDFDocument({ margin: 20, size: 'A4', layout: 'landscape', autoFirstPage: true });
 
         doc.on('error', (err) => {
           console.error('[EXPORT PDF STREAM ERROR]:', err);
@@ -1345,63 +1346,127 @@ class SolicitudController {
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=Reporte_AVANTE_${new Date().getTime()}.pdf`);
-
-        const logoPath = path.join(__dirname, '../frontend/src/assets/logo.png');
-
         doc.pipe(res);
 
-        // Header Branding
-        try {
-          if (fs.existsSync(logoPath)) {
-            doc.image(logoPath, 20, 20, { width: 80 });
-          }
-        } catch (e) { /* ignore logo error */ }
+        // --- CONSTANTES DE LAYOUT ---
+        const MX = 20;           // margen horizontal
+        const MY = 20;           // margen vertical
+        const FONT_SZ = 6.5;     // tamaño de fuente
+        const ROW_H = 18;        // altura fija de cada fila de datos
+        const HEADER_H = 20;     // altura del encabezado de columnas
+        const PAGE_H = 595.28;   // alto de A4 landscape en puntos
+        const PAD = 3;            // padding interno de celda
+        const BLUE = '#1b4f72';
+        const BORDER = '#CCCCCC';
+        const TABLE_W = 775;
 
-        doc.fontSize(14).font('Helvetica-Bold').text('REPORTE GENERAL DE SOLICITUDES', 0, 30, { align: 'center' });
+        const cols = [
+          { label: 'OBSERV.',  key: 'OBSERVAC.',                                    width: 100 },
+          { label: 'CÓDIGO',   key: 'CÓDIGO',                                        width: 75  },
+          { label: 'FECHA',    key: 'FECHA',                                          width: 48  },
+          { label: 'DEP.',     key: 'DEPARTAMENTO',                                   width: 75  },
+          { label: 'C.COSTO',  key: 'UNIDAD SOLICITANTE / CENTRO DE COSTO',           width: 90  },
+          { label: 'O/C',      key: 'ORDEN DE COMPRA',                                width: 48  },
+          { label: 'PROVEEDOR',key: 'PROVEEDOR',                                      width: 90  },
+          { label: '($)',      key: 'MONTO ($)',    width: 50, align: 'right' },
+          { label: '(BS)',     key: 'MONTO (BS)',   width: 50, align: 'right' },
+          { label: '(€)',      key: 'MONTO (EUROS)',width: 45, align: 'right' },
+          { label: 'PAGO',     key: 'FECHA PAGO',                                     width: 48  },
+          { label: 'STATUS',   key: 'STATUS',                                          width: 56  }
+        ];
+
+        // --- FUNCIÓN: dibujar encabezado de columnas ---
+        const drawTableHeader = (y) => {
+          doc.rect(MX, y, TABLE_W, HEADER_H).fill(BLUE);
+          let x = MX;
+          doc.fontSize(FONT_SZ).font('Helvetica-Bold').fillColor('#FFFFFF');
+          cols.forEach(col => {
+            doc.text(col.label, x + PAD, y + 6, {
+              width: col.width - PAD * 2,
+              align: col.align || 'left',
+              lineBreak: false,
+              ellipsis: true
+            });
+            x += col.width;
+          });
+          return y + HEADER_H;
+        };
+
+        // --- FUNCIÓN: dibujar una fila de datos ---
+        const drawDataRow = (rowValues, rowColor, y) => {
+          // Fondo de la fila
+          doc.rect(MX, y, TABLE_W, ROW_H).fill(rowColor || '#FFFFFF');
+          // Borde de la fila
+          doc.rect(MX, y, TABLE_W, ROW_H).stroke(BORDER);
+          // Texto de cada celda
+          let x = MX;
+          doc.fontSize(FONT_SZ).font('Helvetica').fillColor('#000000');
+          rowValues.forEach((cellText, i) => {
+            const col = cols[i];
+            // Limpiar saltos de línea y caracteres de control del texto
+            const cleanText = String(cellText != null ? cellText : '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+            doc.text(cleanText, x + PAD, y + 5, {
+              width: col.width - PAD * 2,
+              align: col.align || 'left',
+              lineBreak: false,
+              ellipsis: true
+            });
+            x += col.width;
+          });
+          return y + ROW_H;
+        };
+
+        // --- BRANDING Y TÍTULO ---
+        const logoPath = path.join(__dirname, '../frontend/src/assets/logo.png');
+        try {
+          if (fs.existsSync(logoPath)) doc.image(logoPath, MX, MY, { width: 80 });
+        } catch (e) {}
+
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000')
+           .text('REPORTE GENERAL DE SOLICITUDES', 0, MY + 10, { align: 'center' });
 
         let subheader = `Generado el: ${new Date().toLocaleDateString()}`;
         if (desde && hasta) {
           subheader = `Periodo: ${new Date(desde).toLocaleDateString()} al ${new Date(hasta).toLocaleDateString()} | ${subheader}`;
         }
-        doc.fontSize(8).font('Helvetica').text(subheader, { align: 'right' });
-        doc.moveDown(2);
+        doc.fontSize(8).font('Helvetica').fillColor('#000000').text(subheader, { align: 'right' });
+        doc.moveDown(0.5);
 
-        const table = {
-          headers: [
-            { label: 'OBSERV.', property: 'OBSERVAC.', width: 85 },
-            { label: 'CÓDIGO', property: 'CÓDIGO', width: 75 },
-            { label: 'FECHA', property: 'FECHA', width: 50 },
-            { label: 'DEP.', property: 'DEPARTAMENTO', width: 60 },
-            { label: 'C.COSTO', property: 'UNIDAD SOLICITANTE / CENTRO DE COSTO', width: 80 },
-            { label: 'O/C', property: 'ORDEN DE COMPRA', width: 45 },
-            { label: 'PROVEEDOR', property: 'PROVEEDOR', width: 95 },
-            { label: '($)', property: 'MONTO ($)', width: 45 },
-            { label: '(BS)', property: 'MONTO (BS)', width: 45 },
-            { label: '(€)', property: 'MONTO (EUROS)', width: 45 },
-            { label: 'PAGO', property: 'FECHA PAGO', width: 50 },
-            { label: 'STATUS', property: 'STATUS', width: 50 }
-          ],
-          rows: datosExportacion.map(d => [
-            d['OBSERVAC.'].substring(0, 40), d['CÓDIGO'], d['FECHA'], d['DEPARTAMENTO'],
-            d['UNIDAD SOLICITANTE / CENTRO DE COSTO'], d['ORDEN DE COMPRA'], d['PROVEEDOR'],
-            d['MONTO ($)'] ? d['MONTO ($)'].toFixed(2) : '',
-            d['MONTO (BS)'] ? d['MONTO (BS)'].toFixed(2) : '',
-            d['MONTO (EUROS)'] ? d['MONTO (EUROS)'].toFixed(2) : '',
-            d['FECHA PAGO'], d['STATUS']
-          ])
-        };
+        // --- TABLA ---
+        let currentY = doc.y;
+        currentY = drawTableHeader(currentY);
 
-        await doc.table(table, {
-          prepareHeader: () => doc.font('Helvetica-Bold').fontSize(7),
-          prepareRow: (row, indexColumn, indexRow, rectRow, rectCell) => {
-            const color = datosExportacion[indexRow]._color;
-            if (color) {
-              const { x, y, width, height } = rectCell;
-              doc.rect(x, y, width, height).fill(color);
-            }
-            doc.fillColor('#000000').font('Helvetica').fontSize(7);
+        for (let i = 0; i < datosExportacion.length; i++) {
+          const d = datosExportacion[i];
+
+          // Si la fila no cabe en la página actual, saltar a la siguiente
+          if (currentY + ROW_H > PAGE_H - 45) {
+            doc.addPage();
+            currentY = MY;
+            doc.fontSize(8).font('Helvetica-Oblique').fillColor('#666666')
+               .text('REPORTE GENERAL DE SOLICITUDES (continuación)', MX, currentY);
+            currentY += 13;
+            currentY = drawTableHeader(currentY);
           }
-        });
+
+          const rowValues = [
+            d['OBSERVAC.']                                    || '',
+            d['CÓDIGO']                                        || '',
+            d['FECHA']                                         || '',
+            d['DEPARTAMENTO']                                  || '',
+            d['UNIDAD SOLICITANTE / CENTRO DE COSTO']          || '',
+            d['ORDEN DE COMPRA']                               || '',
+            d['PROVEEDOR']                                     || '',
+            d['MONTO ($)']     != null ? d['MONTO ($)'].toFixed(2)     : '',
+            d['MONTO (BS)']    != null ? d['MONTO (BS)'].toFixed(2)    : '',
+            d['MONTO (EUROS)'] != null ? d['MONTO (EUROS)'].toFixed(2) : '',
+            d['FECHA PAGO']                                    || '',
+            d['STATUS']                                        || ''
+          ];
+
+          currentY = drawDataRow(rowValues, d._color, currentY);
+        }
+
         doc.end();
       } else {
         res.status(400).json({ error: 'Formato no soportado' });
@@ -1458,21 +1523,24 @@ class SolicitudController {
   }
 
   /**
-   * Genera el reporte especial "RELACIÓN DE SOLICITUDES PENDIENTES DE PAGO"
+   * Genera el reporte especial "RELACIÓN DE SOLICITUDES" (Personalizado)
    * Agrupado por Unidad/Buque con subtotales, según formato solicitado.
    */
-  async reporteRelacionPendientes(req, res) {
+  async reporteRelacionPersonalizada(req, res) {
     try {
       if (req.usuario.rol?.toLowerCase() !== 'administrador' && req.usuario.rol?.toLowerCase() !== 'gestor') {
         return res.status(403).json({ error: 'No tiene permisos para este reporte' });
       }
 
-      // 1. Obtener solicitudes con estatus Pendiente o Creado
       console.log('[REPORTE DEBUG] Iniciando búsqueda de solicitudes...');
-      const { desde, hasta } = req.query;
-      const where = {
-        estatus: { [Op.or]: ['Creado', 'Pendiente'] }
-      };
+      const { desde, hasta, estatus } = req.query;
+      
+      const where = {};
+      
+      if (estatus) {
+        const estatusArray = estatus.split(',').map(s => s.trim());
+        where.estatus = { [Op.in]: estatusArray };
+      }
 
       // Restricción por departamento (Gestores y otros roles no admin)
       if (req.usuario.rol?.toLowerCase() !== 'administrador') {
@@ -1494,9 +1562,8 @@ class SolicitudController {
         where.unidadSolicitante = { [Op.in]: departamentosParaFiltrar };
       }
 
-
-
       if (desde && hasta) {
+        // Asumimos createdAt para la fecha de cruce
         where.createdAt = {
           [Op.between]: [new Date(desde), new Date(`${hasta}T23:59:59.999Z`)]
         };
@@ -1522,12 +1589,12 @@ class SolicitudController {
       const doc = new PDFTable({ margin: 20, size: 'A4', layout: 'landscape' });
 
       doc.on('error', (err) => {
-        console.error('[PENDIENTES REPORT STREAM ERROR]:', err);
+        console.error('[REPORT STREAM ERROR]:', err);
         if (!res.headersSent) res.status(500).json({ error: 'Error en flujo PDF' });
         else res.end();
       });
 
-      const filename = `Relacion_Pendientes_${new Date().getTime()}.pdf`;
+      const filename = `Relacion_Solicitudes_${new Date().getTime()}.pdf`;
       res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
       res.setHeader('Content-Type', 'application/pdf');
       doc.pipe(res);
@@ -1538,7 +1605,7 @@ class SolicitudController {
         if (fs.existsSync(logoPath)) doc.image(logoPath, 20, 20, { width: 70 });
       } catch (e) { }
 
-      doc.fontSize(14).font('Helvetica-Bold').text('RELACIÓN DE SOLICITUDES PENDIENTES DE PAGO', 0, 30, { align: 'center' });
+      doc.fontSize(14).font('Helvetica-Bold').text('RELACIÓN DE SOLICITUDES', 0, 30, { align: 'center' });
 
       let subheader = `Fecha de Corte: ${new Date().toLocaleDateString()}`;
       if (desde && hasta) {
@@ -1549,7 +1616,6 @@ class SolicitudController {
 
       // --- CONSTRUCCIÓN DE TABLAS POR GRUPO ---
       const blueHeader = '#1b4f72';
-      const lightBlue = '#ebf5fb';
       let isFirstUnidad = true;
 
       for (const unidad in grupos) {
@@ -1558,7 +1624,6 @@ class SolicitudController {
         let subtotalFila = 0;
 
         try {
-          // Si no es la primera unidad y el espacio es poco, nueva página
           if (!isFirstUnidad && doc.y > 450) {
             doc.addPage();
           } else if (!isFirstUnidad) {
@@ -1571,15 +1636,16 @@ class SolicitudController {
 
           const table = {
             headers: [
-              { label: 'Descripción', property: 'descripcion', width: 180, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Buque/Unidad Usuaria', property: 'unidad', width: 80, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Código O/C', property: 'oc', width: 80, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Descripción', property: 'descripcion', width: 145, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Buque/Unidad', property: 'unidad', width: 70, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Código O/C', property: 'oc', width: 70, headerColor: blueHeader, headerOpacity: 1 },
               { label: 'Monto en $', property: 'monto', width: 60, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Método de pago', property: 'metodo', width: 75, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Tipo transferencia', property: 'moneda', width: 75, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Proveedor', property: 'proveedor', width: 95, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Fecha inclusión', property: 'fecha', width: 60, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Comprador', property: 'comprador', width: 70, headerColor: blueHeader, headerOpacity: 1 }
+              { label: 'Método de pago', property: 'metodo', width: 70, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Transferencia', property: 'moneda', width: 65, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Proveedor', property: 'proveedor', width: 80, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Fecha inc.', property: 'fecha', width: 55, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Comprador', property: 'comprador', width: 65, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Estatus', property: 'estatus', width: 70, headerColor: blueHeader, headerOpacity: 1 }
             ],
             rows: await Promise.all(items.map(async sol => {
               const monto = parseFloat(sol.montoTotal);
@@ -1601,9 +1667,10 @@ class SolicitudController {
                 monto.toLocaleString('es-VE', { minimumFractionDigits: 2 }),
                 sol.metodoPago || 'N/A',
                 sol.moneda === 'Bs' ? 'BOLIVARES' : (sol.moneda === 'USD' ? 'DIVISAS' : (sol.moneda || 'N/A')),
-                prov.razonSocial || 'N/A',
+                prov.razonSocial ? prov.razonSocial.substring(0, 30) : 'N/A',
                 sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : 'N/A',
-                elaborado ? elaborado.nombre.toUpperCase() : 'N/A'
+                elaborado ? elaborado.nombre.toUpperCase() : 'N/A',
+                (sol.estatus || 'N/A').toUpperCase()
               ];
             }))
           };
@@ -1639,196 +1706,7 @@ class SolicitudController {
     } catch (error) {
       console.error('[REPORTE ERROR]:', error);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Error al generar reporte de pendientes' });
-      }
-    } finally {
-      // Incrementar contador de operaciones
-      await sistemaService.incrementarOperaciones();
-    }
-  }
-
-
-  /**
-   * Genera el reporte especial "RELACIÓN DE PAGOS REALIZADOS"
-   * Agrupado por Unidad/Buque con subtotales, según formato solicitado.
-   */
-  async reporteRelacionPagados(req, res) {
-    try {
-      if (req.usuario.rol?.toLowerCase() !== 'administrador' && req.usuario.rol?.toLowerCase() !== 'gestor') {
-        return res.status(403).json({ error: 'No tiene permisos para este reporte' });
-      }
-
-      // 1. Obtener solicitudes con estatus Pagado
-      console.log('[REPORTE DEBUG PAGOS] Iniciando búsqueda de solicitudes...');
-      const { desde, hasta } = req.query;
-      const where = {
-        estatus: 'Pagado'
-      };
-
-      // Restricción por departamento (Gestores y otros roles no admin)
-      if (req.usuario.rol?.toLowerCase() !== 'administrador') {
-        const esGestor = req.usuario.rol?.toLowerCase() === 'gestor';
-        let departamentosParaFiltrar = [req.usuario.departamento];
-
-        const parseJsonArray = (val) => {
-          let parsed = val;
-          while (typeof parsed === 'string' && parsed.trim().startsWith('[')) {
-            try { parsed = JSON.parse(parsed); } catch (e) { break; }
-          }
-          return Array.isArray(parsed) ? parsed : [];
-        };
-
-        if (esGestor && req.usuario.departamentosAutorizados) {
-          const extras = parseJsonArray(req.usuario.departamentosAutorizados);
-          departamentosParaFiltrar = [...new Set([...departamentosParaFiltrar, ...extras])];
-        }
-        where.unidadSolicitante = { [Op.in]: departamentosParaFiltrar };
-      }
-
-
-
-      if (desde && hasta) {
-        where.fechaPago = {
-          [Op.between]: [new Date(desde), new Date(`${hasta}T23:59:59.999Z`)]
-        };
-      }
-
-      const solicitudes = await Solicitud.findAll({
-        where,
-        order: [['unidadSolicitante', 'ASC'], ['createdAt', 'ASC']]
-      });
-      console.log(`[REPORTE DEBUG PAGOS] Solicitudes encontradas: ${solicitudes.length}`);
-
-      // 2. Agrupar por Unidad/Buque
-      const grupos = {};
-      solicitudes.forEach(sol => {
-        const unidad = sol.unidadSolicitante || 'SIN UNIDAD';
-        if (!grupos[unidad]) grupos[unidad] = [];
-        grupos[unidad].push(sol);
-      });
-      console.log(`[REPORTE DEBUG PAGOS] Grupos generados: ${Object.keys(grupos).length}`);
-
-      const PDFTable = require('pdfkit-table');
-      console.log('[REPORTE DEBUG PAGOS] PDFTable cargado');
-      const doc = new PDFTable({ margin: 20, size: 'A4', layout: 'landscape' });
-
-      doc.on('error', (err) => {
-        console.error('[PAGADOS REPORT STREAM ERROR]:', err);
-        if (!res.headersSent) res.status(500).json({ error: 'Error en flujo PDF' });
-        else res.end();
-      });
-
-      const filename = `Relacion_Pagos_${new Date().getTime()}.pdf`;
-      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-      res.setHeader('Content-Type', 'application/pdf');
-      doc.pipe(res);
-
-      // --- BRANDING Y TÍTULO ---
-      const logoPath = path.join(__dirname, '../frontend/src/assets/logo.png');
-      try {
-        if (fs.existsSync(logoPath)) doc.image(logoPath, 20, 20, { width: 70 });
-      } catch (e) { }
-
-      doc.fontSize(14).font('Helvetica-Bold').text('RELACIÓN DE PAGOS REALIZADOS', 0, 30, { align: 'center' });
-
-      let subheader = `Fecha de Corte: ${new Date().toLocaleDateString()}`;
-      if (desde && hasta) {
-        subheader = `Periodo: ${new Date(desde).toLocaleDateString()} al ${new Date(hasta).toLocaleDateString()} | ${subheader}`;
-      }
-      doc.fontSize(8).font('Helvetica').text(subheader, { align: 'right' });
-      doc.moveDown(2);
-
-      // --- CONSTRUCCIÓN DE TABLAS POR GRUPO ---
-      const blueHeader = '#1b4f72';
-      let isFirstUnidad = true;
-
-      for (const unidad in grupos) {
-        console.log(`[REPORTE DEBUG PAGOS] Procesando unidad: ${unidad}`);
-        const items = grupos[unidad];
-        let subtotalFila = 0;
-
-        try {
-          if (!isFirstUnidad && doc.y > 450) {
-            doc.addPage();
-          } else if (!isFirstUnidad) {
-            doc.moveDown(2);
-          }
-          isFirstUnidad = false;
-
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(`BUQUE/UNIDAD: ${unidad.toUpperCase()}`, 20);
-          doc.moveDown(0.5);
-
-          const table = {
-            headers: [
-              { label: 'Descripción', property: 'descripcion', width: 180, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Buque/Unidad Usuaria', property: 'unidad', width: 80, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Código O/C', property: 'oc', width: 80, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Monto en $', property: 'monto', width: 60, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Método de pago', property: 'metodo', width: 75, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Tipo transferencia', property: 'moneda', width: 75, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Proveedor', property: 'proveedor', width: 95, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Fecha inclusión', property: 'fecha', width: 60, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Comprador', property: 'comprador', width: 70, headerColor: blueHeader, headerOpacity: 1 }
-            ],
-            rows: await Promise.all(items.map(async sol => {
-              const monto = parseFloat(sol.montoTotal);
-              subtotalFila += monto;
-
-              let prov = {};
-              try {
-                prov = typeof sol.proveedor === 'string' ? JSON.parse(sol.proveedor) : (sol.proveedor || {});
-              } catch (e) {
-                console.error(`[REPORTE ERROR PAGOS] Error parseando proveedor en solicitud ${sol.id}`);
-              }
-
-              const elaborado = await Usuario.findByPk(sol.elaboradoPor, { attributes: ['nombre'] });
-
-              return [
-                (sol.conceptoPago || '').substring(0, 100),
-                sol.unidadSolicitante || 'N/A',
-                sol.numeroRequerimiento || sol.correlativo || 'N/A',
-                monto.toLocaleString('es-VE', { minimumFractionDigits: 2 }),
-                sol.metodoPago || 'N/A',
-                sol.moneda === 'Bs' ? 'BOLIVARES' : (sol.moneda === 'USD' ? 'DIVISAS' : (sol.moneda || 'N/A')),
-                prov.razonSocial || 'N/A',
-                sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : 'N/A',
-                elaborado ? elaborado.nombre.toUpperCase() : 'N/A'
-              ];
-            }))
-          };
-
-          await doc.table(table, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF'),
-            prepareRow: (row, indexColumn, indexRow, rectRow, rectCell) => {
-              doc.font('Helvetica').fontSize(7).fillColor('#000000');
-            },
-            padding: 5,
-            hideHeader: false,
-            minRowHeight: 15
-          });
-
-          // --- FILA DE SUBTOTAL POR UNIDAD ---
-          if (doc.y > 500) doc.addPage();
-
-          const currentY = doc.y;
-          doc.rect(20, currentY, 775, 18).fill(blueHeader).stroke();
-          doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-          doc.text(`Subtotal ${unidad}: ${subtotalFila.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 25, currentY + 5);
-          doc.moveDown(2);
-          console.log(`[REPORTE DEBUG PAGOS] Unidad ${unidad} finalizada`);
-        } catch (e) {
-          console.error(`[REPORTE ERROR PAGOS] Error procesando tabla de unidad ${unidad}:`, e.message);
-          throw e;
-        }
-      }
-
-      doc.end();
-      console.log('[REPORTE DEBUG PAGOS] PDF finalizado exitosamente');
-
-    } catch (error) {
-      console.error('[REPORTE ERROR PAGOS]:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Error al generar reporte de pagos' });
+        res.status(500).json({ error: 'Error al generar reporte de relacion' });
       }
     } finally {
       // Incrementar contador de operaciones

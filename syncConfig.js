@@ -12,7 +12,7 @@ async function syncDatabase() {
         await SistemaConfig.sync({ alter: true });
         console.log('--- Modelo Sincronizado ---');
 
-        console.log('--- Inicializando valores (Versión 2.5 y Operaciones 250) ---');
+        console.log('--- Inicializando valores (Versión 2.7 y Operaciones 250) ---');
         await sistemaService.inicializar();
         
         console.log('\n--- ÉXITO: Base de datos preparada correctamente ---');
