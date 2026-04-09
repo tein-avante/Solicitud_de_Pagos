@@ -11,6 +11,7 @@ import FormularioSolicitud from './components/FormularioSolicitud';
 import Login from './components/Login';
 import CambiarPassword from './components/CambiarPassword';
 import Maestros from './components/Maestros';
+import FinanzasDirecto from './components/FinanzasDirecto';
 
 /**
  * Componente Wrapper para rutas protegidas.
@@ -77,6 +78,16 @@ function App() {
                     element={
                         <PrivateRoute>
                             <Maestros />
+                        </PrivateRoute>
+                    }
+                />
+
+                {/* Módulo de Finanzas (Caja Chica y Pagos Directos) */}
+                <Route
+                    path="/finanzas"
+                    element={
+                        <PrivateRoute>
+                            <FinanzasDirecto />
                         </PrivateRoute>
                     }
                 />

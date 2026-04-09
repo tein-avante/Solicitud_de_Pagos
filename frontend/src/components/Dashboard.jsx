@@ -24,7 +24,8 @@ import {
   Upload,
   Tooltip,
   InputNumber,
-  Typography
+  Typography,
+  Popover
 } from 'antd';
 import {
   PlusOutlined,
@@ -42,7 +43,9 @@ import {
   SettingOutlined,
   BulbOutlined,
   BulbFilled,
-  BarChartOutlined
+  BarChartOutlined,
+  FilterOutlined,
+  WalletOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
@@ -82,9 +85,11 @@ const Dashboard = () => {
   const [filtroProveedor, setFiltroProveedor] = useState(null);
   const [filtroDepartamento, setFiltroDepartamento] = useState(null);
   const [filtroEstatus, setFiltroEstatus] = useState('');
+  const [filtroCentroCosto, setFiltroCentroCosto] = useState(null);
   const [proveedoresLista, setProveedoresLista] = useState([]);
   const [deptsLista, setDeptsLista] = useState([]);
-  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.7', operaciones: null });
+  const [centrosCostoLista, setCentrosCostoLista] = useState([]);
+  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.9', operaciones: null });
 
 
   const [form] = Form.useForm();
@@ -113,9 +118,10 @@ const Dashboard = () => {
 
   const cargarAuxiliares = async () => {
     try {
-      const [p, d] = await Promise.all([api.get('/proveedores'), api.get('/departamentos')]);
+      const [p, d, c] = await Promise.all([api.get('/proveedores'), api.get('/departamentos'), api.get('/centros-costo')]);
       setProveedoresLista(p.data);
       setDeptsLista(d.data);
+      setCentrosCostoLista(Array.isArray(c.data) ? c.data : c.data?.centros || []);
     } catch (e) {
       console.warn('Error al cargar auxiliares para filtros');
     }
@@ -131,12 +137,14 @@ const Dashboard = () => {
       const estatusFilter = ('estatus' in extraFilters) ? extraFilters.estatus : filtroEstatus;
       const provFilter = ('proveedorId' in extraFilters) ? extraFilters.proveedorId : filtroProveedor;
       const deptFilter = ('unidadSolicitante' in extraFilters) ? extraFilters.unidadSolicitante : filtroDepartamento;
+      const centroFilter = ('centroCostoId' in extraFilters) ? extraFilters.centroCostoId : filtroCentroCosto;
 
       let url = `/solicitudes?pagina=${page}&limite=${limit}`;
       if (estatusFilter) url += `&estatus=${estatusFilter}`;
       if (provFilter) url += `&proveedorId=${provFilter}`;
       if (deptFilter) url += `&unidadSolicitante=${deptFilter}`;
-      
+      if (centroFilter) url += `&centroCostoId=${centroFilter}`;
+
       const response = await api.get(url);
       setSolicitudes(response.data.solicitudes);
       setTotalItems(response.data.total);
@@ -195,10 +203,10 @@ const Dashboard = () => {
   const confirmarRechazar = async (values) => {
     try {
       const { motivo } = values;
-      await api.patch(`/solicitudes/${solicitudSeleccionada.id}/estatus`, { 
-        estatus: 'Rechazado', 
+      await api.patch(`/solicitudes/${solicitudSeleccionada.id}/estatus`, {
+        estatus: 'Rechazado',
         motivo: motivo,
-        comentario: motivo 
+        comentario: motivo
       });
       message.success('Solicitud rechazada');
       setModalRechazar(false);
@@ -216,10 +224,10 @@ const Dashboard = () => {
   const confirmarDevolver = async (values) => {
     try {
       const { motivo } = values;
-      await api.patch(`/solicitudes/${solicitudSeleccionada.id}/estatus`, { 
-        estatus: 'Devuelto', 
+      await api.patch(`/solicitudes/${solicitudSeleccionada.id}/estatus`, {
+        estatus: 'Devuelto',
         motivo: motivo,
-        comentario: motivo 
+        comentario: motivo
       });
       message.success('Solicitud devuelta');
       setModalDevolver(false);
@@ -236,10 +244,13 @@ const Dashboard = () => {
    */
   const confirmarPagar = async () => {
     try {
+      // Validar campos antes de proceder (esto dispara los errores visuales)
+      const values = await form.validateFields();
+      
       const formData = new FormData();
       formData.append('estatus', 'Pagado');
-      
-      const { comentarioAccion, tasaBCV } = form.getFieldsValue(); 
+
+      const { comentarioAccion, tasaBCV } = values;
       if (comentarioAccion) formData.append('comentario', comentarioAccion);
       if (tasaBCV) formData.append('tasaBCV', tasaBCV);
 
@@ -322,7 +333,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       console.log('Iniciando descarga de reporte de relacion con filtro...', { desde, hasta, estatus: estatusReporte });
-      
+
       const estatusQuery = estatusReporte.join(',');
       const res = await api.get(`/solicitudes/reporte/relacion?desde=${desde}&hasta=${hasta}&estatus=${estatusQuery}`, { responseType: 'blob' });
 
@@ -380,38 +391,46 @@ const Dashboard = () => {
     {
       title: 'Correlativo',
       dataIndex: 'correlativo',
-      width: 200,
+      width: 130,
       ellipsis: true,
       render: (text, r) => <Button type="link" onClick={() => handleVer(r.id)} style={{ padding: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{text}</Button>
     },
     {
       title: 'Fecha',
       dataIndex: 'fechaSolicitud',
-      width: 120,
+      width: 95,
       render: (text) => moment(text).format('DD/MM/YYYY')
     },
     {
       title: 'Departamento',
       dataIndex: 'unidadSolicitante',
-      width: 180,
+      width: 170,
       ellipsis: true
     },
     {
       title: 'Concepto',
       dataIndex: 'conceptoPago',
-      width: 250,
+      // Sin ancho fijo: se expande para ocupar el espacio disponible de forma flexible
       ellipsis: true
     },
     {
       title: 'Monto',
       dataIndex: 'montoTotal',
-      width: 150,
+      width: 140,
       render: (text, r) => `${r.moneda} ${Number(text).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`
+    },
+    {
+      title: 'Tasa BCV',
+      dataIndex: 'tasaBCV',
+      width: 100,
+      render: (val) => val
+        ? <Tooltip title="Tasa de cambio BCV al momento del pago"><span style={{ color: '#237804', fontWeight: 600 }}>Bs. {Number(val).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></Tooltip>
+        : <span style={{ color: '#bbb' }}>—</span>
     },
     {
       title: 'Estatus',
       dataIndex: 'estatus',
-      width: 120,
+      width: 110,
       render: (val) => {
         let color = 'blue';
         const s = val?.trim().toLowerCase();
@@ -428,7 +447,7 @@ const Dashboard = () => {
     },
     {
       title: 'Acciones',
-      width: 250,
+      width: 200,
       render: (_, r) => (
         <Space size="small">
           <Tooltip title="Ver Detalle">
@@ -441,19 +460,19 @@ const Dashboard = () => {
           {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
             <>
               {/* ACCIONES DEL GESTOR (O ADMIN) - AUTORIZAR */}
-          {/* ACCIONES DEL GESTOR (GERENTE) / ADMINISTRADOR */}
-          {(usuario?.rol?.trim().toLowerCase().includes('gestor') || 
-            usuario?.rol?.trim().toLowerCase().includes('administrador')) &&
-           r.estatus?.trim().toLowerCase() === 'pendiente' && (
-            <Tooltip title={`Autorizar (Soy: ${usuario.rol}, Estatus: ${r.estatus})`}>
-              <Button
-                icon={<CheckOutlined />}
-                size="small"
-                style={{ backgroundColor: '#722ed1', color: 'white' }}
-                onClick={() => handleAccionDirecta(r.id, 'Autorizado')}
-              />
-            </Tooltip>
-          )}
+              {/* ACCIONES DEL GESTOR (GERENTE) / ADMINISTRADOR */}
+              {(usuario?.rol?.trim().toLowerCase().includes('gestor') ||
+                usuario?.rol?.trim().toLowerCase().includes('administrador')) &&
+                r.estatus?.trim().toLowerCase() === 'pendiente' && (
+                  <Tooltip title={`Autorizar (Soy: ${usuario.rol}, Estatus: ${r.estatus})`}>
+                    <Button
+                      icon={<CheckOutlined />}
+                      size="small"
+                      style={{ backgroundColor: '#722ed1', color: 'white' }}
+                      onClick={() => handleAccionDirecta(r.id, 'Autorizado')}
+                    />
+                  </Tooltip>
+                )}
 
 
 
@@ -481,20 +500,20 @@ const Dashboard = () => {
               )}
 
               {/* DEVOLVER Y RECHAZAR (Común para Admin, Gestor y ahora Auditor) */}
-              {(r.estatus?.trim().toLowerCase() === 'pendiente' || 
-                r.estatus?.trim().toLowerCase() === 'autorizado' || 
+              {(r.estatus?.trim().toLowerCase() === 'pendiente' ||
+                r.estatus?.trim().toLowerCase() === 'autorizado' ||
                 r.estatus?.trim().toLowerCase() === 'aprobado') && (
-                <>
-                  <Tooltip title="Devolver">
-                    <Button icon={<UndoOutlined />} size="small" onClick={() => handleDevolver(r)} />
-                  </Tooltip>
-                  {usuario?.rol?.trim().toLowerCase() === 'administrador' && (
-                    <Tooltip title="Rechazar">
-                      <Button icon={<CloseOutlined />} size="small" danger onClick={() => handleRechazar(r)} />
+                  <>
+                    <Tooltip title="Devolver">
+                      <Button icon={<UndoOutlined />} size="small" onClick={() => handleDevolver(r)} />
                     </Tooltip>
-                  )}
-                </>
-              )}
+                    {usuario?.rol?.trim().toLowerCase() === 'administrador' && (
+                      <Tooltip title="Rechazar">
+                        <Button icon={<CloseOutlined />} size="small" danger onClick={() => handleRechazar(r)} />
+                      </Tooltip>
+                    )}
+                  </>
+                )}
 
             </>
           )}
@@ -529,55 +548,63 @@ const Dashboard = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px', maxWidth: '100%', overflowX: 'hidden' }}>
       {/* HEADER: Logo y Usuario */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, alignItems: 'center' }}>
-        <img src={logo} alt="Logo" style={{ height: 60 }} />
-        <Space size="large">
-          <div style={{ textAlign: 'right' }}>
-            <Text strong>{usuario?.nombre}</Text><br />
-            <Text type="secondary" size="small">
+      <div className="dashboard-header" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        gap: '12px',
+        flexWrap: 'wrap'
+      }}>
+        {/* Logo */}
+        <img src={logo} alt="Logo" style={{ height: 50, objectFit: 'contain', flexShrink: 0 }} />
+
+        {/* Info usuario + botones */}
+        <div className="dashboard-header-info" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end', flex: '1 1 auto' }}>
+          {/* Nombre y rol */}
+          <div className="user-info" style={{ textAlign: 'right', lineHeight: '1.4', flex: '1 1 auto' }}>
+            <Text strong style={{ fontSize: '13px', display: 'block' }}>{usuario?.nombre}</Text>
+            <Text type="secondary" style={{ fontSize: '11px', display: 'block', wordBreak: 'break-word' }}>
               {usuario?.rol ? (
                 `[${usuario.rol}] - ${usuario.departamento}`
               ) : (
-                <span style={{ color: 'red', fontWeight: 'bold' }}>¡ALERTA: ROL VACÍO EN SESIÓN!</span>
+                <span style={{ color: 'red', fontWeight: 'bold' }}>¡ROL VACÍO!</span>
               )}
             </Text>
           </div>
-          <Space>
+
+          {/* Botones de acción */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
             <Tooltip title="Cambiar Tema">
-              <Button
-                shape="circle"
-                icon={isDarkMode ? <BulbFilled /> : <BulbOutlined />}
-                onClick={toggleTheme}
-              />
+              <Button shape="circle" size="small" icon={isDarkMode ? <BulbFilled /> : <BulbOutlined />} onClick={toggleTheme} />
             </Tooltip>
             {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
-              <Tooltip title="Gestión de Maestros">
-                <Button
-                  shape="circle"
-                  icon={<SettingOutlined />}
-                  onClick={() => navigate('/maestros')}
-                />
-              </Tooltip>
+              <Space size="small">
+                <Tooltip title="Módulo de Finanzas (Caja Chica / Pagos Directos)">
+                  <Button shape="circle" size="small" style={{ backgroundColor: '#ffdf00', color: '#1890ff', borderColor: '#ffdf00' }} icon={<DollarOutlined />} onClick={() => navigate('/finanzas')} />
+                </Tooltip>
+                <Tooltip title="Gestión de Maestros">
+                  <Button shape="circle" size="small" icon={<SettingOutlined />} onClick={() => navigate('/maestros')} />
+                </Tooltip>
+              </Space>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-              <Button type="primary" danger icon={<LogoutOutlined />} onClick={handleLogout}>Salir</Button>
-              <div style={{ marginTop: 4, textAlign: 'right', lineHeight: '1.2' }}>
-                <Text type="secondary" style={{ fontSize: '10px', display: 'block' }}>v{sistemaInfo.version}</Text>
-                {usuario?.rol?.toLowerCase() === 'administrador' && sistemaInfo.operaciones && (
-                  <Text type="secondary" style={{ fontSize: '10px', color: '#888' }}>
-                    🔢 {Number(sistemaInfo.operaciones).toLocaleString()} ops
-                  </Text>
-                )}
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Button type="primary" danger size="small" icon={<LogoutOutlined />} onClick={handleLogout}>Salir</Button>
+              <Text type="secondary" style={{ fontSize: '10px', marginTop: 2 }}>v{sistemaInfo.version}</Text>
+              {usuario?.rol?.toLowerCase() === 'administrador' && sistemaInfo.operaciones && (
+                <Text type="secondary" style={{ fontSize: '10px', color: '#888' }}>
+                  🔢 {Number(sistemaInfo.operaciones).toLocaleString()} ops
+                </Text>
+              )}
             </div>
-          </Space>
-        </Space>
+          </div>
+        </div>
       </div>
 
-
-      <Row gutter={16} style={{ marginBottom: 24 }}>
+      {/* CARDS DE ESTADÍSTICAS */}
+      <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
         {[
           { label: 'Total', key: 'total', icon: <TeamOutlined />, color: '#1890ff' },
           { label: 'Pendientes', key: 'pendientes', icon: <ExclamationCircleOutlined />, color: '#faad14' },
@@ -585,13 +612,13 @@ const Dashboard = () => {
           { label: 'Pagadas', key: 'pagadas', icon: <DollarOutlined />, color: '#13c2c2' },
           { label: 'Cerradas', key: 'cerradas', icon: <CheckOutlined />, color: '#fa8c16' }
         ].map(item => (
-          <Col key={item.key} style={{ flex: '1 0 20%', maxWidth: '20%' }}>
-            <Card bordered={false} hoverable>
+          <Col key={item.key} xs={12} sm={12} md={8} lg={{ flex: '20%' }} xl={{ flex: '20%' }}>
+            <Card bordered={false} hoverable bodyStyle={{ padding: '12px 16px' }}>
               <Statistic
                 title={item.label}
                 value={estadisticas[item.key] || 0}
                 prefix={item.icon}
-                valueStyle={{ color: item.color }}
+                valueStyle={{ color: item.color, fontSize: '20px' }}
               />
             </Card>
           </Col>
@@ -602,54 +629,83 @@ const Dashboard = () => {
       <Card
         title="Historial de Solicitudes"
         extra={
-          <Space wrap>
-            <Select
-              showSearch
-              placeholder="Filtrar Proveedor"
-              style={{ width: 180 }}
-              allowClear
-              optionFilterProp="children"
-              onChange={(val) => {
-                setFiltroProveedor(val);
-                cargarSolicitudes(1, pageSize, { proveedorId: val });
-              }}
-            >
-              {proveedoresLista.map(p => <Select.Option key={p.id} value={p.id}>{p.razonSocial}</Select.Option>)}
-            </Select>
+          <Space wrap className="desktop-filters">
+            <Popover
+              placement="bottomLeft"
+              title="Filtros de Búsqueda"
+              trigger="click"
+              content={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '250px' }}>
+                  <Select
+                    showSearch
+                    placeholder="Filtrar Proveedor"
+                    style={{ width: '100%' }}
+                    allowClear
+                    optionFilterProp="children"
+                    value={filtroProveedor}
+                    onChange={(val) => {
+                      setFiltroProveedor(val);
+                      cargarSolicitudes(1, pageSize, { proveedorId: val });
+                    }}
+                  >
+                    {proveedoresLista.map(p => <Select.Option key={p.id} value={p.id}>{p.razonSocial}</Select.Option>)}
+                  </Select>
 
-            <Select
-              showSearch
-              placeholder="Filtrar Departamento"
-              style={{ width: 180 }}
-              allowClear
-              optionFilterProp="children"
-              onChange={(val) => {
-                setFiltroDepartamento(val);
-                cargarSolicitudes(1, pageSize, { unidadSolicitante: val });
-              }}
-            >
-              {deptsLista.map(d => <Select.Option key={d.id} value={d.nombre}>{d.nombre}</Select.Option>)}
-            </Select>
+                  <Select
+                    showSearch
+                    placeholder="Filtrar Departamento"
+                    style={{ width: '100%' }}
+                    allowClear
+                    optionFilterProp="children"
+                    value={filtroDepartamento}
+                    onChange={(val) => {
+                      setFiltroDepartamento(val);
+                      cargarSolicitudes(1, pageSize, { unidadSolicitante: val });
+                    }}
+                  >
+                    {deptsLista.map(d => <Select.Option key={d.id} value={d.nombre}>{d.nombre}</Select.Option>)}
+                  </Select>
 
-            <Select
-              placeholder="Filtrar por Estatus"
-              style={{ width: 170 }}
-              allowClear
-              onChange={(val) => {
-                const est = val || '';
-                setFiltroEstatus(est);
-                cargarSolicitudes(1, pageSize, { estatus: est });
-              }}
+                  <Select
+                    showSearch
+                    placeholder="Filtrar Centro de Costo"
+                    style={{ width: '100%' }}
+                    allowClear
+                    optionFilterProp="children"
+                    value={filtroCentroCosto}
+                    onChange={(val) => {
+                      setFiltroCentroCosto(val);
+                      cargarSolicitudes(1, pageSize, { centroCostoId: val });
+                    }}
+                  >
+                    {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.nombre}>{c.nombre}</Select.Option>)}
+                  </Select>
+
+                  <Select
+                    placeholder="Filtrar por Estatus"
+                    style={{ width: '100%' }}
+                    allowClear
+                    value={filtroEstatus || undefined}
+                    onChange={(val) => {
+                      const est = val || '';
+                      setFiltroEstatus(est);
+                      cargarSolicitudes(1, pageSize, { estatus: est });
+                    }}
+                  >
+                    <Select.Option value="Pendiente">PENDIENTE</Select.Option>
+                    <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
+                    <Select.Option value="Aprobado">APROBADO</Select.Option>
+                    <Select.Option value="Pagado">PAGADO</Select.Option>
+                    <Select.Option value="Cerrado">CERRADO</Select.Option>
+                    <Select.Option value="Devuelto">DEVUELTO</Select.Option>
+                    <Select.Option value="Rechazado">RECHAZADO</Select.Option>
+                    <Select.Option value="Anulado">ANULADO</Select.Option>
+                  </Select>
+                </div>
+              }
             >
-              <Select.Option value="Pendiente">PENDIENTE</Select.Option>
-              <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
-              <Select.Option value="Aprobado">APROBADO</Select.Option>
-              <Select.Option value="Pagado">PAGADO</Select.Option>
-              <Select.Option value="Cerrado">CERRADO</Select.Option>
-              <Select.Option value="Devuelto">DEVUELTO</Select.Option>
-              <Select.Option value="Rechazado">RECHAZADO</Select.Option>
-              <Select.Option value="Anulado">ANULADO</Select.Option>
-            </Select>
+              <Button icon={<FilterOutlined />}>Filtros</Button>
+            </Popover>
             <Button
               icon={<BarChartOutlined />}
               onClick={() => setModalEstadisticas(true)}
@@ -675,21 +731,114 @@ const Dashboard = () => {
           </Space>
         }
       >
+        {/* FILTROS VERSIÓN MÓVIL (dentro del body del Card) */}
+        <div className="mobile-filters" style={{ display: 'none' }}>
+          {/* El botón de Filtros reemplaza todos los selects individuales también aquí */}
+          <Popover
+            placement="bottomLeft"
+            title="Filtros de Búsqueda"
+            trigger="click"
+            content={
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '250px' }}>
+                <Select
+                  showSearch
+                  placeholder="Filtrar Proveedor"
+                  style={{ width: '100%' }}
+                  allowClear
+                  optionFilterProp="children"
+                  value={filtroProveedor}
+                  onChange={(val) => {
+                    setFiltroProveedor(val);
+                    cargarSolicitudes(1, pageSize, { proveedorId: val });
+                  }}
+                >
+                  {proveedoresLista.map(p => <Select.Option key={p.id} value={p.id}>{p.razonSocial}</Select.Option>)}
+                </Select>
+
+                <Select
+                  showSearch
+                  placeholder="Filtrar Departamento"
+                  style={{ width: '100%' }}
+                  allowClear
+                  optionFilterProp="children"
+                  value={filtroDepartamento}
+                  onChange={(val) => {
+                    setFiltroDepartamento(val);
+                    cargarSolicitudes(1, pageSize, { unidadSolicitante: val });
+                  }}
+                >
+                  {deptsLista.map(d => <Select.Option key={d.id} value={d.nombre}>{d.nombre}</Select.Option>)}
+                </Select>
+
+                <Select
+                  showSearch
+                  placeholder="Filtrar Centro de Costo"
+                  style={{ width: '100%' }}
+                  allowClear
+                  optionFilterProp="children"
+                  value={filtroCentroCosto}
+                  onChange={(val) => {
+                    setFiltroCentroCosto(val);
+                    cargarSolicitudes(1, pageSize, { centroCostoId: val });
+                  }}
+                >
+                  {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.nombre}>{c.nombre}</Select.Option>)}
+                </Select>
+
+                <Select
+                  placeholder="Filtrar por Estatus"
+                  style={{ width: '100%' }}
+                  allowClear
+                  value={filtroEstatus || undefined}
+                  onChange={(val) => {
+                    const est = val || '';
+                    setFiltroEstatus(est);
+                    cargarSolicitudes(1, pageSize, { estatus: est });
+                  }}
+                >
+                  <Select.Option value="Pendiente">PENDIENTE</Select.Option>
+                  <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
+                  <Select.Option value="Aprobado">APROBADO</Select.Option>
+                  <Select.Option value="Pagado">PAGADO</Select.Option>
+                  <Select.Option value="Cerrado">CERRADO</Select.Option>
+                  <Select.Option value="Devuelto">DEVUELTO</Select.Option>
+                  <Select.Option value="Rechazado">RECHAZADO</Select.Option>
+                  <Select.Option value="Anulado">ANULADO</Select.Option>
+                </Select>
+              </div>
+            }
+          >
+            <Button icon={<FilterOutlined />} style={{ width: '100%' }}>Filtros</Button>
+          </Popover>
+
+          <div className="filter-buttons-row">
+            <Button icon={<BarChartOutlined />} onClick={() => setModalEstadisticas(true)}>
+              Estadísticas
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/solicitudes/nueva')}>
+              Nueva
+            </Button>
+            {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
+              <>
+                <Button icon={<PrinterOutlined />} onClick={handleReporteRelacion} style={{ backgroundColor: '#1b4f72', color: 'white' }} className="btn-full">
+                  Relación de Solicitudes
+                </Button>
+                <Button icon={<ExportOutlined />} onClick={() => handleExportar('xlsx')}>Excel</Button>
+                <Button icon={<ExportOutlined />} onClick={() => handleExportar('pdf')}>PDF</Button>
+              </>
+            )}
+          </div>
+        </div>
+
         <Table
           columns={columns}
           dataSource={solicitudes}
           loading={loading}
           rowKey="id"
-          scroll={{ x: 'max-content' }}
-          pagination={{
-            total: totalItems,
-            current: currentPage,
-            pageSize: pageSize,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '50', '100'],
-            onShowSizeChange: (current, size) => cargarSolicitudes(1, size),
-            onChange: (p, size) => cargarSolicitudes(p, size)
-          }}
+          scroll={{ x: 1100 }}
+          tableLayout="fixed"
+          size="small"
+          pagination={false}
         />
       </Card>
 
@@ -756,16 +905,16 @@ const Dashboard = () => {
         cancelText="Cancelar"
       >
         <p>Adjunte el comprobante de pago e indique la tasa BCV para la solicitud <strong>{solicitudSeleccionada?.correlativo}</strong></p>
-        
+
         <Form form={form} layout="vertical">
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item name="tasaBCV" label="Tasa de Cambio BCV del día" rules={[{ required: true, message: 'Indique la tasa BCV' }]}>
-                <InputNumber 
-                  style={{ width: '100%' }} 
-                  placeholder="Ej: 36.45" 
-                  step={0.01} 
-                  min={0.01} 
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Ej: 36.45"
+                  step={0.01}
+                  min={0.01}
                   precision={4}
                 />
               </Form.Item>

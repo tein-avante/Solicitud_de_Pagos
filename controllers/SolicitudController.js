@@ -9,6 +9,7 @@ const Solicitud = require('../models/Solicitud');
 const Usuario = require('../models/Usuario');
 const Proveedor = require('../models/Proveedor');
 const CentroCosto = require('../models/CentroCosto');
+const DistribucionGasto = require('../models/DistribucionGasto');
 let Departamento = null;
 try { Departamento = require('../models/Departamento'); } catch (e) { console.warn('[WARN] Modelo Departamento no encontrado, se usará nombre de departamento como respaldo'); }
 const Notificacion = require('../models/Notificacion');
@@ -45,7 +46,6 @@ class SolicitudController {
         conceptoPago,
         observaciones,
         soportes,
-        centroCosto,
         proveedor,
         metodoPago,
         datosBancarios,
@@ -53,17 +53,20 @@ class SolicitudController {
         moneda,
         tiposSoporte,
         tipoPago,
-        numeroOrdenCompra
+        numeroOrdenCompra,
+        distribucionCentros  // Array de distribución de centros de costo
       } = req.body;
 
       // Validación: La fecha límite no puede ser anterior a hoy
       const fechaActual = new Date();
-      fechaActual.setHours(0, 0, 0, 0); // Solo queremos comparar la fecha, no la hora
+      
+      const fechaParaComparar = new Date(fechaActual);
+      fechaParaComparar.setHours(0, 0, 0, 0); // Solo queremos comparar la fecha, no la hora
 
       const fechaLimite = new Date(fechaLimiteRequerida);
       fechaLimite.setHours(0, 0, 0, 0);
 
-      if (fechaLimite < fechaActual) {
+      if (fechaLimite < fechaParaComparar) {
         return res.status(400).json({ error: 'La fecha límite no puede ser anterior a la fecha actual' });
       }
 
@@ -121,52 +124,87 @@ class SolicitudController {
         }));
       }
 
-      // Crear el registro en la base de datos
-      const nuevaSolicitud = await Solicitud.create({
-        correlativo,
-        fechaSolicitud: fechaActual,
-        unidadSolicitante,
-        numeroRequerimiento,
-        fechaLimiteRequerida,
-        nivelPrioridad,
-        conceptoPago,
-        observaciones,
-        soportes: archivosSoportes, // Guardamos los archivos procesados
-        centroCosto,
-        proveedor: typeof proveedor === 'string' ? JSON.parse(proveedor) : proveedor,
-        metodoPago,
-        datosBancarios: typeof datosBancarios === 'string' ? JSON.parse(datosBancarios) : datosBancarios,
-        tipoPago: tipoPago || 'Unico Pago',
-        montoTotal,
-        moneda,
-        tiposSoporte: typeof tiposSoporte === 'string' ? JSON.parse(tiposSoporte) : (tiposSoporte || []),
-        numeroOrdenCompra: numeroOrdenCompra || '',
-        estatus: 'Pendiente',
-        elaboradoPor: req.usuario.id,
-        historial: [{
-          fecha: fechaActual,
+      // Crear el registro en la base de datos (usando transacción para garantizar integridad)
+      const t = await sequelize.transaction();
+      try {
+        const nuevaSolicitud = await Solicitud.create({
+          correlativo,
+          fechaSolicitud: fechaActual,
+          unidadSolicitante,
+          numeroRequerimiento,
+          fechaLimiteRequerida,
+          nivelPrioridad,
+          conceptoPago,
+          observaciones,
+          soportes: archivosSoportes, // Guardamos los archivos procesados
+          proveedor: typeof proveedor === 'string' ? JSON.parse(proveedor) : proveedor,
+          metodoPago,
+          datosBancarios: typeof datosBancarios === 'string' ? JSON.parse(datosBancarios) : datosBancarios,
+          tipoPago: tipoPago || 'Unico Pago',
+          montoTotal,
+          moneda,
+          tiposSoporte: typeof tiposSoporte === 'string' ? JSON.parse(tiposSoporte) : (tiposSoporte || []),
+          numeroOrdenCompra: numeroOrdenCompra || '',
+          estatus: 'Pendiente',
+          elaboradoPor: req.usuario.id,
+          historial: [{
+            fecha: fechaActual,
+            usuario: req.usuario.id,
+            accion: 'Creación de solicitud',
+            comentario: 'Solicitud creada exitosamente'
+          }]
+        }, { transaction: t });
+
+        // Guardar distribución de centros de costo si se envió
+        let distribucionParsed = [];
+        if (distribucionCentros) {
+          try {
+            distribucionParsed = typeof distribucionCentros === 'string'
+              ? JSON.parse(distribucionCentros)
+              : distribucionCentros;
+          } catch (e) { 
+            console.error('[PARSE ERROR] Fallo al parsear distribucionCentros:', e.message);
+            distribucionParsed = []; 
+          }
+        }
+
+        if (Array.isArray(distribucionParsed) && distribucionParsed.length > 0) {
+          for (const linea of distribucionParsed) {
+            if (linea.centroCostoId) {
+              await DistribucionGasto.create({
+                solicitudId: nuevaSolicitud.id,
+                centroCostoId: linea.centroCostoId,
+                monto: parseFloat(linea.monto) || 0,
+                porcentaje: parseFloat(linea.porcentaje) || 0,
+                descripcion: linea.descripcion || ''
+              }, { transaction: t });
+            }
+          }
+        }
+
+        await t.commit();
+
+        // Crear notificación automática para los administradores
+        const NotificacionController = require('./NotificacionController');
+        await NotificacionController.crearNotificacion({
           usuario: req.usuario.id,
-          accion: 'Creación de solicitud',
-          comentario: 'Solicitud creada exitosamente'
-        }]
-      });
+          tipo: 'Creación',
+          mensaje: `Solicitud ${correlativo} creada exitosamente`,
+          relacionadoA: nuevaSolicitud.id
+        });
 
-      // Crear notificación automática para los administradores
-      const NotificacionController = require('./NotificacionController');
-      await NotificacionController.crearNotificacion({
-        usuario: req.usuario.id,
-        tipo: 'Creación',
-        mensaje: `Solicitud ${correlativo} creada exitosamente`,
-        relacionadoA: nuevaSolicitud.id
-      });
+        res.status(201).json({
+          mensaje: 'Solicitud creada exitosamente',
+          solicitud: nuevaSolicitud
+        });
 
-      res.status(201).json({
-        mensaje: 'Solicitud creada exitosamente',
-        solicitud: nuevaSolicitud
-      });
+        // Incrementar contador de operaciones
+        await sistemaService.incrementarOperaciones();
 
-      // Incrementar contador de operaciones
-      await sistemaService.incrementarOperaciones();
+      } catch (innerError) {
+        await t.rollback();
+        throw innerError;
+      }
 
     } catch (error) {
       console.error('[CREATION ERROR]:', error);
@@ -260,6 +298,25 @@ class SolicitudController {
       solicitudJson.autorizadoPor = autorizadoPor;
       solicitudJson.procesadoPor = procesadoPor;
 
+      // Cargar distribución de centros de costo
+      try {
+        const distribuciones = await DistribucionGasto.findAll({
+          where: { solicitudId: solicitud.id },
+          include: [{ model: CentroCosto, foreignKey: 'centroCostoId' }]
+        });
+        solicitudJson.distribucionCentros = distribuciones.map(d => ({
+          id: d.id,
+          centroCostoId: d.centroCostoId,
+          centroCostoNombre: d.CentroCosto ? d.CentroCosto.nombre : 'N/A',
+          monto: parseFloat(d.monto),
+          porcentaje: parseFloat(d.porcentaje),
+          descripcion: d.descripcion || ''
+        }));
+      } catch (distErr) {
+        console.error('[DISTRIBUCION ERROR] No se pudo cargar distribución:', distErr.message);
+        solicitudJson.distribucionCentros = [];
+      }
+
       res.json(solicitudJson);
 
       // Incrementar contador de operaciones al visualizar una solicitud
@@ -313,24 +370,34 @@ class SolicitudController {
       }
 
       if (req.query.proveedorId) {
-        // Como proveedor es un JSON, buscamos el ID dentro del string/objeto
-        // Sequelize maneja mejor la búsqueda en JSON si se define correctamente, 
-        // pero aquí el campo es DataTypes.JSON, así que usamos Op.like en el stringify si fuera necesario,
-        // o mejor filtramos por el campo unidadSolicitante si es departamento.
-        // Para proveedor, como es un objeto guardado, buscaremos el ID.
-        where.proveedor = { [Op.like]: `%"id":${req.query.proveedorId}%` };
+        where[Op.and] = where[Op.and] || [];
+        where[Op.and].push(
+          sequelize.where(
+            sequelize.fn('JSON_EXTRACT', sequelize.col('proveedor'), sequelize.literal(`'$.id'`)),
+            req.query.proveedorId
+          )
+        );
       }
 
       if (req.query.unidadSolicitante) {
         where.unidadSolicitante = req.query.unidadSolicitante;
       }
 
-      const offset = (pagina - 1) * limite;
+      // Filtro por Centro de Costo (Buscando en la tabla de Distribución)
+      const include = [];
+      if (req.query.centroCostoId) {
+        include.push({
+          model: DistribucionGasto,
+          where: { centroCostoId: req.query.centroCostoId },
+          required: true
+        });
+      }
+
       const { rows: solicitudesRows, count: total } = await Solicitud.findAndCountAll({
         where,
-        order: [['createdAt', 'DESC']],
-        limit: parseInt(limite),
-        offset: parseInt(offset)
+        include,
+        distinct: true, // Importante para conteo correcto con joins
+        order: [['createdAt', 'DESC']]
       });
 
       // Mapear resultados para incluir nombres de usuarios
@@ -591,12 +658,14 @@ class SolicitudController {
         solicitud.procesadoPor = req.usuario.id; // En el flujo anterior se llamaba autorizadoPor, pero aquí es la segunda firma (Admin)
         solicitud.fechaAprobacion = new Date();
       } else if (estatus === 'Pagado') {
-        // Al pagar, el admin firma como procesado o podemos usar un nuevo campo si fuera necesario, 
-        // pero seguiremos la lógica de adjuntar el comprobante.
-        solicitud.fechaPago = new Date();
-        if (req.body.tasaBCV) {
-          solicitud.tasaBCV = req.body.tasaBCV;
+        // Validación de seguridad: no permitir pago sin Tasa BCV
+        if (!req.body.tasaBCV) {
+          return res.status(400).json({ error: 'La Tasa BCV es obligatoria para marcar la solicitud como Pagada' });
         }
+        
+        solicitud.fechaPago = new Date();
+        solicitud.tasaBCV = req.body.tasaBCV;
+        
         if (req.file) {
           solicitud.comprobantePago = req.file.path.replace(/\\/g, '/');
         }
@@ -937,35 +1006,72 @@ class SolicitudController {
 
       // --- CENTRO DE COSTO Y METODO PAGO ---
       const ccY = sopBoxY + 50;
-      doc.rect(30, ccY, 535, 50).stroke();
-      doc.moveTo(210, ccY).lineTo(210, ccY + 50).stroke(); // Vertical Centro Costo
+
+      // Cargar distribuciones de centros de costo para la solicitud
+      let distribuciones = [];
+      try {
+        distribuciones = await DistribucionGasto.findAll({
+          where: { solicitudId: solicitud.id },
+          include: [{ model: CentroCosto, foreignKey: 'centroCostoId' }]
+        });
+      } catch (e) { distribuciones = []; }
+
+      const tieneDistribucion = distribuciones.length > 0;
+      // Altura dinámica: más espacio si hay distribución múltiple
+      const ccHeight = tieneDistribucion && distribuciones.length > 1 ? Math.max(50, 20 + distribuciones.length * 12) : 50;
+
+      doc.rect(30, ccY, 535, ccHeight).stroke();
+      doc.moveTo(210, ccY).lineTo(210, ccY + ccHeight).stroke(); // Vertical Centro Costo
       doc.moveTo(210, ccY + 20).lineTo(565, ccY + 20).stroke(); // Horizontal Pago/Monto
-      doc.moveTo(400, ccY + 20).lineTo(400, ccY + 50).stroke(); // Vertical Método/Tipo
+      doc.moveTo(400, ccY + 20).lineTo(400, ccY + ccHeight).stroke(); // Vertical Método/Tipo
 
-      doc.font('Helvetica-Bold').text('CENTRO DE COSTO ASIGNADO:', 35, ccY + 15);
-      doc.font('Helvetica').text(solicitud.centroCosto, 35, ccY + 28);
+      doc.font('Helvetica-Bold').fontSize(7).text('CENTRO DE COSTO ASIGNADO:', 35, ccY + 5);
 
-      doc.font('Helvetica-Bold').text('MÉTODO DE PAGO:', 215, ccY + 4);
-      doc.font('Helvetica').text(solicitud.metodoPago, 320, ccY + 4);
+      if (tieneDistribucion) {
+        // Mostrar listado de centros de costo con su monto (Altura dinámica por cada línea)
+        let dyCC = ccY + 12;
+        distribuciones.forEach(d => {
+          const nombreCC = d.CentroCosto ? d.CentroCosto.nombre.toUpperCase() : 'N/A';
+          const montoStr = `${solicitud.moneda} ${parseFloat(d.monto || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+          const pctCC = parseFloat(d.porcentaje || 0).toFixed(1);
+          
+          const textoLinea = `• ${nombreCC}: ${montoStr} (${pctCC}%)`;
+          const altoLinea = doc.heightOfString(textoLinea, { width: 175 });
+          
+          doc.font('Helvetica').fontSize(6).text(textoLinea, 35, dyCC, { width: 175, align: 'left' });
+          dyCC += altoLinea + 2; // Salto dinámico + 2px de margen
+        });
+      } else {
+        doc.font('Helvetica').fontSize(8).text('SIN CENTRO DE COSTO ASIGNADO', 35, ccY + 18);
+      }
 
-      doc.font('Helvetica-Bold').text('MONTO TOTAL A PAGAR:', 215, ccY + 28);
-      doc.font('Helvetica').fontSize(10).text(`${solicitud.moneda} ${parseFloat(solicitud.montoTotal || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 215, ccY + 38);
+      // Calcular posición central vertical derecha (para Método/Monto relativo al bloque)
+      const ccMidRight = ccY + Math.floor(ccHeight / 2);
 
-      doc.font('Helvetica-Bold').fontSize(6).text('TIPO DE PAGO:', 405, ccY + 24);
-      doc.rect(405, ccY + 33, 7, 7).stroke();
-      doc.font('Helvetica').fontSize(6).text('ÚNICO PAGO', 414, ccY + 34);
-      doc.rect(460, ccY + 33, 7, 7).stroke();
-      doc.text('ANTICIPO', 469, ccY + 34);
-      doc.rect(510, ccY + 33, 7, 7).stroke();
-      doc.text('FONDO FIJO', 519, ccY + 34);
+      doc.font('Helvetica-Bold').fontSize(7).text('MÉTODO DE PAGO:', 215, ccY + 4);
+      doc.font('Helvetica').fontSize(8).text(solicitud.metodoPago, 320, ccY + 4);
+
+      doc.font('Helvetica-Bold').fontSize(7).text('MONTO TOTAL A PAGAR:', 215, ccY + 22);
+      doc.font('Helvetica').fontSize(10).text(`${solicitud.moneda} ${parseFloat(solicitud.montoTotal || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 215, ccY + 32);
+
+      // Tipo de pago (checkboxes) — posicionados en la parte inferior derecha
+      const tipoY = ccY + ccHeight - 18;
+      doc.font('Helvetica-Bold').fontSize(6).text('TIPO DE PAGO:', 405, ccY + 4);
+      doc.rect(405, tipoY, 7, 7).stroke();
+      doc.font('Helvetica').fontSize(6).text('ÚNICO PAGO', 414, tipoY + 1);
+      doc.rect(460, tipoY, 7, 7).stroke();
+      doc.text('ANTICIPO', 469, tipoY + 1);
+      doc.rect(510, tipoY, 7, 7).stroke();
+      doc.text('FONDO FIJO', 519, tipoY + 1);
 
       const tipoPagoStr = (solicitud.tipoPago || '').toUpperCase();
-      if (tipoPagoStr === 'ANTICIPO') doc.font('Helvetica-Bold').text('X', 461, ccY + 34, { width: 6, align: 'center', fontSize: 6 });
-      else if (tipoPagoStr === 'ÚNICO PAGO' || tipoPagoStr === 'UNICO PAGO') doc.font('Helvetica-Bold').text('X', 406, ccY + 34, { width: 6, align: 'center', fontSize: 6 });
-      else if (tipoPagoStr === 'FONDO FIJO') doc.font('Helvetica-Bold').text('X', 511, ccY + 34, { width: 6, align: 'center', fontSize: 6 });
+      if (tipoPagoStr === 'ANTICIPO') doc.font('Helvetica-Bold').text('X', 461, tipoY + 1, { width: 6, align: 'center', fontSize: 6 });
+      else if (tipoPagoStr === 'ÚNICO PAGO' || tipoPagoStr === 'UNICO PAGO') doc.font('Helvetica-Bold').text('X', 406, tipoY + 1, { width: 6, align: 'center', fontSize: 6 });
+      else if (tipoPagoStr === 'FONDO FIJO') doc.font('Helvetica-Bold').text('X', 511, tipoY + 1, { width: 6, align: 'center', fontSize: 6 });
 
       // --- DATOS DEL PROVEEDOR ---
-      const provY = ccY + 55;
+      // provY usa ccHeight dinámico para no solaparse con distribución múltiple
+      const provY = ccY + ccHeight + 5;
       doc.rect(30, provY, 535, 12).fill('#F2F2F2').stroke();
       doc.fillColor('#000000').font('Helvetica-Bold').text('DATOS DEL PROVEEDOR', 30, provY + 3, { width: 535, align: 'center' });
 
@@ -980,19 +1086,30 @@ class SolicitudController {
       const dirText = proveedor.direccionFiscal || proveedor.direccion || '';
       const hDir = Math.max(15, doc.heightOfString(dirText, { width: dirWidth }) + 5);
 
-      // Lógica flexible para datos bancarios
+      // Lógica flexible para datos bancarios estructurados (Pago Móvil, e-pay, Transferencia)
       let infoPago = '';
-      if (solicitud.metodoPago.toUpperCase() !== 'EFECTIVO') {
-        if (datosBancarios.coordenadas) {
-          infoPago = datosBancarios.coordenadas;
-        } else if (datosBancarios.banco || datosBancarios.cuenta) {
-          infoPago = `${datosBancarios.banco || ''} - ${datosBancarios.cuenta || ''}`;
-        } else if (proveedor.banco || proveedor.cuenta) {
-          infoPago = `${proveedor.banco || ''} - ${proveedor.cuenta || ''}`;
-        }
-      } else {
+      const metodo = (solicitud.metodoPago || '').toUpperCase();
+      const db = datosBancarios || {};
+
+      if (metodo === 'PAGO MOVIL' || metodo === 'PAGO MÓVIL') {
+        infoPago = `PAGO MÓVIL: ${db.bancoPago || db.banco || ''} | Telf: ${db.telefonoPago || ''} | RIF/C.I: ${db.rifPago || ''}`;
+      } else if (metodo === 'E-PAY') {
+        infoPago = `e-pay: ${db.emailPago || ''}`;
+      } else if (metodo === 'TRANSFERENCIA') {
+        infoPago = `BANCO: ${db.banco || ''} | CUENTA: ${db.cuenta || ''}`;
+      } else if (metodo === 'EFECTIVO') {
         infoPago = 'PAGO EN EFECTIVO';
+      } else {
+        // Respaldo para datos antiguos en texto plano o campos de proveedor
+        if (db.coordenadas) {
+          infoPago = db.coordenadas;
+        } else if (db.banco || db.cuenta) {
+          infoPago = `${db.banco || ''} - ${db.cuenta || ''}`.trim();
+        } else if (proveedor.banco || proveedor.cuenta) {
+          infoPago = `${proveedor.banco || ''} - ${proveedor.cuenta || ''}`.trim();
+        }
       }
+
       const hPago = Math.max(15, doc.heightOfString(infoPago, { width: infoPagoWidth }) + 5);
 
       // Dibujar Filas con alturas ajustadas
@@ -1023,7 +1140,7 @@ class SolicitudController {
       doc.moveTo(30, currentY).lineTo(565, currentY).stroke();
 
       // Fila 5: Datos de Pago (DYNAMICA)
-      doc.font('Helvetica-Bold').text('DATOS PARA EL PAGO (BANCO/CUENTA/COORDINADAS):', 35, currentY + 4, { width: 220 });
+      doc.font('Helvetica-Bold').text('DATOS PARA EL PAGO (BANCO/CUENTA/COORDENADAS):', 35, currentY + 4, { width: 220 });
       doc.font('Helvetica').text(infoPago, 255, currentY + 4, { width: infoPagoWidth });
       currentY += hPago;
 
@@ -1257,8 +1374,12 @@ class SolicitudController {
         };
       }
 
-      // Obtener todas las solicitudes filtradas
-      const solicitudes = await Solicitud.findAll({ where, order: [['createdAt', 'DESC']] });
+      // Obtener todas las solicitudes filtradas incluyendo su distribución
+      const solicitudes = await Solicitud.findAll({ 
+        where, 
+        include: [{ model: DistribucionGasto, include: [CentroCosto] }],
+        order: [['createdAt', 'DESC']] 
+      });
 
       // Preparar los datos mapeados al nuevo formato con colores
       const datosExportacion = await Promise.all(solicitudes.map(async sol => {
@@ -1297,7 +1418,7 @@ class SolicitudController {
           'CÓDIGO': sol.correlativo,
           'FECHA': sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : '',
           'DEPARTAMENTO': sol.unidadSolicitante,
-          'UNIDAD SOLICITANTE / CENTRO DE COSTO': sol.centroCosto,
+          'CENTRO DE COSTO': sol.DistribucionGastos?.map(d => d.CentroCosto?.nombre || 'S/C').join(' / ') || 'N/A',
           'ORDEN DE COMPRA': sol.numeroRequerimiento || '',
           'PROVEEDOR': proveedor.razonSocial || '',
           'MONTO ($)': (moneda === 'USD') ? monto : null,
@@ -1305,6 +1426,7 @@ class SolicitudController {
           'MONTO (EUROS)': (moneda === 'EUR') ? monto : null,
           'METODO DE PAGO': sol.metodoPago,
           'FECHA PAGO': sol.fechaPago ? new Date(sol.fechaPago).toLocaleDateString() : '',
+          'TASA BCV': sol.tasaBCV ? parseFloat(sol.tasaBCV) : null,
           'STATUS': visualStatus,
           '_color': colorHex
         };
@@ -1321,7 +1443,7 @@ class SolicitudController {
         ws['!cols'] = [
           { wch: 35 }, { wch: 22 }, { wch: 12 }, { wch: 20 }, { wch: 25 },
           { wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-          { wch: 20 }, { wch: 12 }, { wch: 15 }
+          { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 15 }
         ];
 
         XLSX.utils.book_append_sheet(wb, ws, 'Reporte de Pagos');
@@ -1358,21 +1480,22 @@ class SolicitudController {
         const PAD = 3;            // padding interno de celda
         const BLUE = '#1b4f72';
         const BORDER = '#CCCCCC';
-        const TABLE_W = 775;
+        const TABLE_W = 800;
 
         const cols = [
-          { label: 'OBSERV.',  key: 'OBSERVAC.',                                    width: 100 },
-          { label: 'CÓDIGO',   key: 'CÓDIGO',                                        width: 75  },
-          { label: 'FECHA',    key: 'FECHA',                                          width: 48  },
-          { label: 'DEP.',     key: 'DEPARTAMENTO',                                   width: 75  },
-          { label: 'C.COSTO',  key: 'UNIDAD SOLICITANTE / CENTRO DE COSTO',           width: 90  },
-          { label: 'O/C',      key: 'ORDEN DE COMPRA',                                width: 48  },
-          { label: 'PROVEEDOR',key: 'PROVEEDOR',                                      width: 90  },
-          { label: '($)',      key: 'MONTO ($)',    width: 50, align: 'right' },
-          { label: '(BS)',     key: 'MONTO (BS)',   width: 50, align: 'right' },
-          { label: '(€)',      key: 'MONTO (EUROS)',width: 45, align: 'right' },
-          { label: 'PAGO',     key: 'FECHA PAGO',                                     width: 48  },
-          { label: 'STATUS',   key: 'STATUS',                                          width: 56  }
+          { label: 'OBSERV.', key: 'OBSERVAC.', width: 98 },
+          { label: 'CÓDIGO', key: 'CÓDIGO', width: 75 },
+          { label: 'FECHA', key: 'FECHA', width: 45 },
+          { label: 'DEP.', key: 'DEPARTAMENTO', width: 70 },
+          { label: 'C.COSTO', key: 'UNIDAD SOLICITANTE / CENTRO DE COSTO', width: 85 },
+          { label: 'O/C', key: 'ORDEN DE COMPRA', width: 45 },
+          { label: 'PROVEEDOR', key: 'PROVEEDOR', width: 85 },
+          { label: '($)', key: 'MONTO ($)', width: 50, align: 'right' },
+          { label: '(BS)', key: 'MONTO (BS)', width: 50, align: 'right' },
+          { label: '(€)', key: 'MONTO (EUROS)', width: 42, align: 'right' },
+          { label: 'TASA BCV', key: 'TASA BCV', width: 55, align: 'right' },
+          { label: 'PAGO', key: 'FECHA PAGO', width: 45 },
+          { label: 'STATUS', key: 'STATUS', width: 55 }
         ];
 
         // --- FUNCIÓN: dibujar encabezado de columnas ---
@@ -1393,37 +1516,38 @@ class SolicitudController {
         };
 
         // --- FUNCIÓN: dibujar una fila de datos ---
-        const drawDataRow = (rowValues, rowColor, y) => {
+        const drawDataRow = (rowValues, rowColor, y, rowH) => {
+          const finalH = Math.max(rowH, ROW_H);
           // Fondo de la fila
-          doc.rect(MX, y, TABLE_W, ROW_H).fill(rowColor || '#FFFFFF');
+          doc.rect(MX, y, TABLE_W, finalH).fill(rowColor || '#FFFFFF');
           // Borde de la fila
-          doc.rect(MX, y, TABLE_W, ROW_H).stroke(BORDER);
+          doc.rect(MX, y, TABLE_W, finalH).stroke(BORDER);
           // Texto de cada celda
           let x = MX;
           doc.fontSize(FONT_SZ).font('Helvetica').fillColor('#000000');
           rowValues.forEach((cellText, i) => {
             const col = cols[i];
-            // Limpiar saltos de línea y caracteres de control del texto
             const cleanText = String(cellText != null ? cellText : '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+            
+            // Calculamos posición vertical para centrar un poco el texto si la fila es muy alta
             doc.text(cleanText, x + PAD, y + 5, {
               width: col.width - PAD * 2,
               align: col.align || 'left',
-              lineBreak: false,
-              ellipsis: true
+              lineBreak: true
             });
             x += col.width;
           });
-          return y + ROW_H;
+          return y + finalH;
         };
 
         // --- BRANDING Y TÍTULO ---
         const logoPath = path.join(__dirname, '../frontend/src/assets/logo.png');
         try {
           if (fs.existsSync(logoPath)) doc.image(logoPath, MX, MY, { width: 80 });
-        } catch (e) {}
+        } catch (e) { }
 
         doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000')
-           .text('REPORTE GENERAL DE SOLICITUDES', 0, MY + 10, { align: 'center' });
+          .text('REPORTE GENERAL DE SOLICITUDES', 0, MY + 10, { align: 'center' });
 
         let subheader = `Generado el: ${new Date().toLocaleDateString()}`;
         if (desde && hasta) {
@@ -1439,32 +1563,41 @@ class SolicitudController {
         for (let i = 0; i < datosExportacion.length; i++) {
           const d = datosExportacion[i];
 
+          const rowValues = [
+            d['OBSERVAC.'] || '',
+            d['CÓDIGO'] || '',
+            d['FECHA'] || '',
+            d['DEPARTAMENTO'] || '',
+            d['UNIDAD SOLICITANTE / CENTRO DE COSTO'] || '',
+            d['ORDEN DE COMPRA'] || '',
+            d['PROVEEDOR'] || '',
+            d['MONTO ($)'] != null ? d['MONTO ($)'].toFixed(2) : '',
+            d['MONTO (BS)'] != null ? d['MONTO (BS)'].toFixed(2) : '',
+            d['MONTO (EUROS)'] != null ? d['MONTO (EUROS)'].toFixed(2) : '',
+            d['TASA BCV'] != null ? d['TASA BCV'].toFixed(2) : '',
+            d['FECHA PAGO'] || '',
+            d['STATUS'] || ''
+          ];
+
+          // Cálculo de altura necesaria para esta fila
+          let maxH = ROW_H;
+          rowValues.forEach((text, idx) => {
+            const colW = cols[idx].width - (PAD * 2);
+            const h = doc.heightOfString(text, { width: colW, lineBreak: true });
+            if (h + 10 > maxH) maxH = h + 10; // +10 por padding superior/inferior
+          });
+
           // Si la fila no cabe en la página actual, saltar a la siguiente
-          if (currentY + ROW_H > PAGE_H - 45) {
+          if (currentY + maxH > PAGE_H - 45) {
             doc.addPage();
             currentY = MY;
             doc.fontSize(8).font('Helvetica-Oblique').fillColor('#666666')
-               .text('REPORTE GENERAL DE SOLICITUDES (continuación)', MX, currentY);
+              .text('REPORTE GENERAL DE SOLICITUDES (continuación)', MX, currentY);
             currentY += 13;
             currentY = drawTableHeader(currentY);
           }
 
-          const rowValues = [
-            d['OBSERVAC.']                                    || '',
-            d['CÓDIGO']                                        || '',
-            d['FECHA']                                         || '',
-            d['DEPARTAMENTO']                                  || '',
-            d['UNIDAD SOLICITANTE / CENTRO DE COSTO']          || '',
-            d['ORDEN DE COMPRA']                               || '',
-            d['PROVEEDOR']                                     || '',
-            d['MONTO ($)']     != null ? d['MONTO ($)'].toFixed(2)     : '',
-            d['MONTO (BS)']    != null ? d['MONTO (BS)'].toFixed(2)    : '',
-            d['MONTO (EUROS)'] != null ? d['MONTO (EUROS)'].toFixed(2) : '',
-            d['FECHA PAGO']                                    || '',
-            d['STATUS']                                        || ''
-          ];
-
-          currentY = drawDataRow(rowValues, d._color, currentY);
+          currentY = drawDataRow(rowValues, d._color, currentY, maxH);
         }
 
         doc.end();
@@ -1534,9 +1667,9 @@ class SolicitudController {
 
       console.log('[REPORTE DEBUG] Iniciando búsqueda de solicitudes...');
       const { desde, hasta, estatus } = req.query;
-      
+
       const where = {};
-      
+
       if (estatus) {
         const estatusArray = estatus.split(',').map(s => s.trim());
         where.estatus = { [Op.in]: estatusArray };
@@ -1618,81 +1751,110 @@ class SolicitudController {
       const blueHeader = '#1b4f72';
       let isFirstUnidad = true;
 
+      // Altura de página A4 landscape en puntos: 841.89
+      const PAGE_HEIGHT_REL = 841.89;
+      const MARGIN_BOTTOM = 40; // margen inferior de seguridad
+      const MIN_ROW_H = 20;    // altura mínima por fila
+      const SUBTOTAL_H = 30;   // espacio fijo para fila de subtotal
+      const HEADER_H_REL = 30; // altura de encabezado de tabla
+      const TITLE_H = 30;      // altura del título de departamento
+
       for (const unidad in grupos) {
         console.log(`[REPORTE DEBUG] Procesando unidad: ${unidad}`);
         const items = grupos[unidad];
         let subtotalFila = 0;
 
         try {
-          if (!isFirstUnidad && doc.y > 450) {
-            doc.addPage();
-          } else if (!isFirstUnidad) {
-            doc.moveDown(2);
+          // Calcular espacio necesario estimado para el grupo completo
+          const spaceNeeded = TITLE_H + HEADER_H_REL + (items.length * MIN_ROW_H) + SUBTOTAL_H;
+          const spaceAvailable = PAGE_HEIGHT_REL - doc.y - MARGIN_BOTTOM;
+
+          if (!isFirstUnidad) {
+            // Si el grupo entero no cabe, saltar a nueva página
+            if (spaceNeeded > spaceAvailable) {
+              doc.addPage();
+            } else {
+              doc.moveDown(1.5);
+            }
           }
           isFirstUnidad = false;
 
-          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(`BUQUE/UNIDAD: ${unidad.toUpperCase()}`, 20);
-          doc.moveDown(0.5);
+          doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000').text(`DEPARTAMENTO: ${unidad.toUpperCase()}`, 20);
+          doc.moveDown(0.3);
+
+          // Pre-calcular filas para poder calcular el subtotal ANTES de dibujar
+          const rows = await Promise.all(items.map(async sol => {
+            const monto = parseFloat(sol.montoTotal);
+            subtotalFila += monto;
+
+            let prov = {};
+            try {
+              prov = typeof sol.proveedor === 'string' ? JSON.parse(sol.proveedor) : (sol.proveedor || {});
+            } catch (e) {
+              console.error(`[REPORTE ERROR] Error parseando proveedor en solicitud ${sol.id}`);
+            }
+
+            const elaborado = await Usuario.findByPk(sol.elaboradoPor, { attributes: ['nombre'] });
+
+            return [
+              (sol.conceptoPago || '').trim(),
+              (sol.unidadSolicitante || 'N/A').trim(),
+              sol.numeroRequerimiento || sol.correlativo || 'N/A',
+              monto.toLocaleString('es-VE', { minimumFractionDigits: 2 }),
+              sol.metodoPago || 'N/A',
+              sol.moneda === 'Bs' ? 'BOLIVARES' : (sol.moneda === 'USD' ? 'DIVISAS' : (sol.moneda || 'N/A')),
+              sol.tasaBCV ? parseFloat(sol.tasaBCV).toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '—',
+              (prov.razonSocial || 'N/A').trim(),
+              sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : 'N/A',
+              elaborado ? elaborado.nombre.toUpperCase() : 'N/A',
+              (sol.estatus || 'N/A').toUpperCase()
+            ];
+          }));
 
           const table = {
             headers: [
-              { label: 'Descripción', property: 'descripcion', width: 145, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Buque/Unidad', property: 'unidad', width: 70, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Código O/C', property: 'oc', width: 70, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Monto en $', property: 'monto', width: 60, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Método de pago', property: 'metodo', width: 70, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Transferencia', property: 'moneda', width: 65, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Proveedor', property: 'proveedor', width: 80, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Fecha inc.', property: 'fecha', width: 55, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Comprador', property: 'comprador', width: 65, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Estatus', property: 'estatus', width: 70, headerColor: blueHeader, headerOpacity: 1 }
+              { label: 'Descripción', property: 'descripcion', width: 135, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Departamento', property: 'unidad', width: 65, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Código O/C', property: 'oc', width: 65, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Monto', property: 'monto', width: 58, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Método pago', property: 'metodo', width: 62, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Moneda', property: 'moneda', width: 58, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Tasa BCV', property: 'tasa', width: 52, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Proveedor', property: 'proveedor', width: 75, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Fecha inc.', property: 'fecha', width: 50, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Comprador', property: 'comprador', width: 60, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Estatus', property: 'estatus', width: 55, headerColor: blueHeader, headerOpacity: 1 }
             ],
-            rows: await Promise.all(items.map(async sol => {
-              const monto = parseFloat(sol.montoTotal);
-              subtotalFila += monto;
-
-              let prov = {};
-              try {
-                prov = typeof sol.proveedor === 'string' ? JSON.parse(sol.proveedor) : (sol.proveedor || {});
-              } catch (e) {
-                console.error(`[REPORTE ERROR] Error parseando proveedor en solicitud ${sol.id}`);
-              }
-
-              const elaborado = await Usuario.findByPk(sol.elaboradoPor, { attributes: ['nombre'] });
-
-              return [
-                (sol.conceptoPago || '').substring(0, 100),
-                sol.unidadSolicitante || 'N/A',
-                sol.numeroRequerimiento || sol.correlativo || 'N/A',
-                monto.toLocaleString('es-VE', { minimumFractionDigits: 2 }),
-                sol.metodoPago || 'N/A',
-                sol.moneda === 'Bs' ? 'BOLIVARES' : (sol.moneda === 'USD' ? 'DIVISAS' : (sol.moneda || 'N/A')),
-                prov.razonSocial ? prov.razonSocial.substring(0, 30) : 'N/A',
-                sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : 'N/A',
-                elaborado ? elaborado.nombre.toUpperCase() : 'N/A',
-                (sol.estatus || 'N/A').toUpperCase()
-              ];
-            }))
+            rows
           };
 
           await doc.table(table, {
-            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF'),
-            prepareRow: (row, indexColumn, indexRow, rectRow, rectCell) => {
-              doc.font('Helvetica').fontSize(7).fillColor('#000000');
-            },
-            padding: 5,
+            prepareHeader: () => doc.font('Helvetica-Bold').fontSize(6).fillColor('#FFFFFF'),
+            prepareRow: () => { doc.font('Helvetica').fontSize(6).fillColor('#000000'); },
+            padding: 2,
             hideHeader: false,
-            minRowHeight: 15
+            minRowHeight: 14,
+            columnSpacing: 2,
+            divider: {
+              header: { disabled: false, width: 0.5, opacity: 1 },
+              horizontal: { disabled: false, width: 0.1, opacity: 0.1 }
+            }
           });
 
           // --- FILA DE SUBTOTAL POR UNIDAD ---
-          if (doc.y > 500) doc.addPage();
+          // Si el subtotal no cabe, saltar a nueva página
+          if (doc.y + SUBTOTAL_H > PAGE_HEIGHT_REL - MARGIN_BOTTOM) {
+            doc.addPage();
+          }
 
-          const currentY = doc.y;
-          doc.rect(20, currentY, 775, 18).fill(blueHeader).stroke();
-          doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-          doc.text(`Subtotal ${unidad}: ${subtotalFila.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 25, currentY + 5);
-          doc.moveDown(2);
+          const currentY = doc.y + 2;
+          doc.rect(20, currentY, 775, 20).fill(blueHeader).stroke();
+          doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
+          doc.text(
+            `Subtotal ${unidad}: ${subtotalFila.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`,
+            25, currentY + 6
+          );
+          doc.moveDown(1.5);
           console.log(`[REPORTE DEBUG] Unidad ${unidad} finalizada`);
         } catch (e) {
           console.error(`[REPORTE ERROR] Error procesando tabla de unidad ${unidad}:`, e.message);
@@ -1749,51 +1911,87 @@ class SolicitudController {
         try {
           data.tiposSoporte = JSON.parse(data.tiposSoporte);
         } catch (e) {
-          // Si no es un JSON válido, lo guardamos como un arreglo con ese valor único
           data.tiposSoporte = [data.tiposSoporte];
         }
       }
 
-      // Campos permitidos para actualizar
+      // Campos permitidos para actualizar (Eliminamos centroCosto de la lista)
       const camposPermitidos = [
         'numeroRequerimiento', 'fechaLimiteRequerida', 'nivelPrioridad',
-        'conceptoPago', 'observaciones', 'centroCosto', 'proveedor',
+        'conceptoPago', 'observaciones', 'proveedor',
         'metodoPago', 'datosBancarios', 'tipoPago', 'montoTotal', 'moneda',
         'tiposSoporte', 'numeroOrdenCompra'
       ];
 
-      camposPermitidos.forEach(campo => {
-        if (data[campo] !== undefined) {
-          solicitud[campo] = data[campo];
-        }
-      });
+      const t = await sequelize.transaction();
+      try {
+        camposPermitidos.forEach(campo => {
+          if (data[campo] !== undefined) {
+            solicitud[campo] = data[campo];
+          }
+        });
 
-      // Si estaba en 'Devuelto' o 'Anulado', al guardar vuelve a 'Pendiente' para re-procesar
-      if (solicitud.estatus === 'Devuelto' || solicitud.estatus === 'Anulado') {
-        solicitud.estatus = 'Pendiente';
+        if (solicitud.estatus === 'Devuelto' || solicitud.estatus === 'Anulado') {
+          solicitud.estatus = 'Pendiente';
+        }
+
+        const parseJsonArray = (val) => {
+          let p = val;
+          while (typeof p === 'string') {
+            try { p = JSON.parse(p); } catch (e) { break; }
+          }
+          return Array.isArray(p) ? p : [];
+        };
+
+        const historial = parseJsonArray(solicitud.historial);
+        historial.push({
+          fecha: new Date(),
+          usuario: req.usuario.id,
+          accion: 'Actualización de datos',
+          comentario: 'Se modificaron los campos de la solicitud y distribución'
+        });
+        solicitud.historial = historial;
+
+        await solicitud.save({ transaction: t });
+
+        // --- ACTUALIZAR DISTRIBUCIÓN DE CENTROS DE COSTO ---
+        let distribucionParsed = [];
+        if (data.distribucionCentros) {
+          try {
+            distribucionParsed = typeof data.distribucionCentros === 'string'
+              ? JSON.parse(data.distribucionCentros)
+              : data.distribucionCentros;
+          } catch (e) { distribucionParsed = []; }
+        }
+
+        // Si se envió una distribución, actualizamos (limpiar y re-insertar)
+        if (Array.isArray(distribucionParsed)) {
+          // 1. Eliminar anteriores
+          await DistribucionGasto.destroy({
+            where: { solicitudId: id },
+            transaction: t
+          });
+
+          // 2. Insertar nuevas
+          for (const linea of distribucionParsed) {
+            if (linea.centroCostoId) {
+              await DistribucionGasto.create({
+                solicitudId: id,
+                centroCostoId: linea.centroCostoId,
+                monto: parseFloat(linea.monto) || 0,
+                porcentaje: parseFloat(linea.porcentaje) || 0,
+                descripcion: linea.descripcion || ''
+              }, { transaction: t });
+            }
+          }
+        }
+
+        await t.commit();
+        res.json({ mensaje: 'Solicitud actualizada exitosamente', solicitud });
+      } catch (innerError) {
+        await t.rollback();
+        throw innerError;
       }
-
-      // Registrar en el historial
-      const parseJsonArray = (val) => {
-        let p = val;
-        while (typeof p === 'string') {
-          try { p = JSON.parse(p); } catch (e) { break; }
-        }
-        return Array.isArray(p) ? p : [];
-      };
-
-      const historial = parseJsonArray(solicitud.historial);
-      historial.push({
-        fecha: new Date(),
-        usuario: req.usuario.id,
-        accion: 'Actualización de datos',
-        comentario: 'Se modificaron los campos de la solicitud'
-      });
-      solicitud.historial = historial;
-
-      await solicitud.save();
-
-      res.json({ mensaje: 'Solicitud actualizada exitosamente', solicitud });
 
       // Incrementar contador de operaciones
       await sistemaService.incrementarOperaciones();
@@ -1825,7 +2023,7 @@ class SolicitudController {
       const esAdmin = req.usuario.rol?.toLowerCase() === 'administrador';
       const esAuditor = req.usuario.rol?.toLowerCase() === 'auditor';
       const esDueño = Number(solicitud.elaboradoPor) === Number(req.usuario.id) ||
-                      solicitud.unidadSolicitante === req.usuario.departamento;
+        solicitud.unidadSolicitante === req.usuario.departamento;
       const estatusPermitidoParaSolicitante = ['Devuelto', 'Anulado'].includes(solicitud.estatus);
 
       // Verificar permisos de acceso
@@ -1898,13 +2096,13 @@ class SolicitudController {
     try {
       const info = await sistemaService.obtenerInfo();
       const esAdmin = req.usuario.rol?.toLowerCase() === 'administrador';
-      
+
       // Solo el administrador puede ver las operaciones
       const data = {
         version: info.version || '2.5',
         operaciones: esAdmin ? (info.operaciones || '250') : null
       };
-      
+
       res.json(data);
     } catch (error) {
       console.error('[SISTEMA INFO ERROR]:', error);

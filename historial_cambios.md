@@ -1,0 +1,72 @@
+# Historial de Cambios - Sistema de Solicitud de Pagos
+
+## 2026-04-09
+
+- **Migración Total a Múltiples Centros de Costo:**
+  - **scripts/drop_centro_costo_column.js:** Script creado para eliminar definitivamente la columna redundante `centroCosto` de la tabla `Solicituds`.
+  - **models/Solicitud.js:** Se eliminó el campo del modelo para evitar discrepancias.
+  - **frontend/src/components/FormularioSolicitud.jsx:** Se removió el selector individual de centro de costo de la interfaz. Ahora la distribución es el único medio de asignación.
+  - **controllers/SolicitudController.js:**
+    - **Filtros del Dashboard:** Se actualizó el método `listar` para realizar un `JOIN` con la tabla `DistribucionGastos`. El filtro por centro de costo ahora busca en toda la distribución.
+    - **Reporte Excel:** Se modificó la columna de centro de costo para que concatene y muestre todos los centros asignados a la solicitud.
+    - **PDF:** Se eliminó la referencia a la columna borrada y se optimizó el diseño dinámico.
+    - **Corrección de Edición:** Se rediseñó el método `actualizar` para que sea capaz de gestionar cambios en la distribución de centros de costo (limpieza y re-inserción dentro de una transacción), solucionando el problema donde los cambios no se reflejaban en el PDF al editar.
+
+- **Subida de Comprobantes en Arqueos:**
+  - **ArqueoCajaChica.js (Modelo):** Se añadió el campo `comprobante` para almacenar la ruta del archivo adjunto.
+  - **CajaChicaController.js:** Se modificó `performArqueo` para capturar y guardar el archivo recibido desde el frontend.
+  - **FinanzasDirecto.jsx:**
+    - Se integró el componente `Upload` en el modal de arqueo.
+    - Se actualizó el envío de datos mediante `FormData` para soportar archivos.
+    - Se añadió una columna de acciones en el historial de arqueos para visualizar los comprobantes adjuntos (icono de ojo).
+  - **Rutas (caja-chica.js):** Se configuró el middleware de `multer` (`upload.single('comprobante')`) en la ruta `POST /arqueo`.
+
+- **Corrección de timestamp en la creación de la solicitud:**
+  - **SolicitudController.js:** Se corrigió el error donde la fecha de creación y el historial registraban la hora como `00:00`. Ahora se captura la hora real de la creación y se maneja una copia independiente para las validaciones de fechas sin hora límite.
+
+- **Gestión Flexibilizada de Datos Bancarios de Proveedores:**
+  - **Proveedor.js (Modelo):** Se añadieron los campos extras `bancoPago`, `telefonoPago`, `rifPago` y `emailPago`. Se dio marcha atrás a forzar un "Método principal", permitiendo guardar todas las opciones libremente.
+  - **Maestros.jsx:** Se restauró el diseño de la tabla y del formulario para mostrar columnas estáticas para "Banco", "Cuenta", "Pago Móvil" y "e-pay", eliminando la dependencia de un menú desplegable de método.
+  - **FormularioSolicitud.jsx:** Ajustado para que, independientemente del método, se cargue toda la información bancaria asociada al proveedor y el sistema use la correcta al momento del pago finalizado por el usuario.
+  - **Migración BD:** Se ejecutó el script `migracion_pagos_proveedores.js` para añadir las columnas faltantes (teléfono, correo, RIF de pago) a los proveedores existentes sin perder datos.
+  - **ProveedorController.js (Carga Masiva Excel):** Se actualizó el reporte descargable de plantilla para que incluya las nuevas columnas (Banco PM, Telf PM, RIF PM, Correo e-pay). El procesador de importación fue ajustado para identificar palabras clave y procesar correctamente todos los métodos de pago.
+
+- **Visibilidad de Tasa BCV (Tasa del Día):**
+  - **FormularioSolicitud.jsx:** Se corrigió bug crítico que impedía mostrar el campo `tasaBCV` (faltaba incluirlo en `form.setFieldsValue`). Se rediseñó el campo como un banner visual con gradiente verde para mayor visibilidad cuando la solicitud está pagada.
+  - **Dashboard.jsx:** Se agregó la columna "Tasa BCV" en la tabla principal de solicitudes, posicionada después de la columna "Monto". Muestra el valor formateado en Bs con tooltip explicativo; las solicitudes sin tasa muestran un guion.
+  - **SolicitudController.js (Exportación Excel):** Se agregó la columna "TASA BCV" al reporte Excel general, después de MONTO (EUROS).
+  - **SolicitudController.js (Reporte PDF General):** Se agregó la columna "TASA BCV" al reporte PDF de exportación masiva.
+  - **SolicitudController.js (Relación de Solicitudes PDF):** Se agregó la columna "Tasa BCV" en la relación de solicitudes agrupada por departamento.
+
+- **Reportes con Altura Dinámica (Texto Completo):**
+  - **SolicitudController.js (Reporte General PDF):** Se eliminó el truncado de texto. Ahora el sistema calcula la altura de cada fila dinámicamente según el contenido de las observaciones, ajustando bordes y fondos automáticamente para evitar solapamientos.
+  - **SolicitudController.js (Relación de Solicitudes PDF):** Se eliminaron todos los límites de caracteres (`substring`). Ahora se muestran nombres de departamento, conceptos y proveedores completos. La lógica de paginación se ajustó para manejar filas de múltiples líneas sin romper el diseño.
+  - **Dashboard.jsx & SolicitudController.js (Validación de Pago):** Se hizo obligatoria la Tasa BCV al marcar como 'Pagado'. Se añadió `form.validateFields()` en el frontend y una verificación de seguridad en el backend para evitar pagos sin tasa.
+  - **SolicitudController.js (PDF individual):** Se eliminó la tasa BCV del PDF imprimible de cada solicitud (a petición del usuario).
+
+- **Visualización de Proveedores Inactivos:**
+  - **FormularioSolicitud.jsx:** Se corrigió el error visual donde los proveedores inactivos se mostraban como IDs numéricos en el selector. Ahora, el sistema detecta si el proveedor de la solicitud no está en la lista de activos y lo incluye dinámicamente para que su nombre se muestre correctamente.
+
+## 2026-04-08
+
+- **Reporte Relación de Solicitudes:**
+  - Se cambió la etiqueta "BUQUE/UNIDAD" por "DEPARTAMENTO" en el encabezado del grupo.
+  - Se cambió la columna "Buque/Unidad" por "Departamento".
+  - Se cambió la columna "Monto en $" por "Monto" para evitar ambigüedad entre Bs y USD.
+  - Se cambió la columna "Transferencia" por "Moneda" para reflejar correctamente el contenido (Pág: SolicitudController.js).
+
+- **Módulo de Finanzas (Caja Chica y Pagos Directos):**
+  - Integración completa del módulo desde el proyecto CCH.
+  - Copia de 6 modelos de Sequelize y configuración de nuevas asociaciones.
+  - Creación de 3 controladores y 3 rutas de API nuevas.
+  - Implementación de componentes `FinanzasDirecto.jsx` y `DistribucionCentrosCosto.jsx`.
+  - Habilitación de ruta `/finanzas` en el Frontend.
+  - Adición de botón de acceso rápido en el Dashboard (solo para Administradores).
+  - Configuración de carga de datos iniciales (`seed_finanzas.js`) en el arranque del servidor.
+  - **Distribución de Gastos:** Se corrigió el guardado de detalles mediante el parseo automático de JSON en peticiones `multipart/form-data`.
+  - **Trazabilidad Global:** Integración con `SistemaService` para el conteo automático de operaciones y visualización de versión en el encabezado.
+  - **Visualización de Comprobantes:**
+    - Implementación de botones "Ver Comprobante" en las tablas de historial de Caja Chica y Pagos Directos.
+    - Integración de acceso a documentos en el detalle expandido de gastos.
+    - Habilitación de visualización de soportes en la pestaña de reportes consolidados.
+    - Configuración dinámica de `fileBaseURL` para compatibilidad con entornos local y producción.

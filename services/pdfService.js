@@ -98,7 +98,7 @@ class PDFService {
         doc.moveDown();
         
         // Centro de costo
-        doc.text(`Centro de Costo: ${solicitud.centroCosto}`);
+        // doc.text(`Centro de Costo: ${solicitud.centroCosto}`);
         doc.moveDown();
         
         // Firmas

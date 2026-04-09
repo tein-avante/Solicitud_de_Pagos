@@ -39,7 +39,7 @@ router.get('/:id/pdf', (req, res) => SolicitudController.generarPDF(req, res));
 router.post('/:id/comentarios', SolicitudController.agregarComentario);
 router.delete('/:id/soportes/:index', SolicitudController.eliminarSoporte);
 router.get('/:id', SolicitudController.obtenerPorId);
-router.put('/:id', SolicitudController.actualizar);
+router.put('/:id', upload.array('soportes'), SolicitudController.actualizar);
 router.put('/:id/estatus', upload.single('comprobante'), SolicitudController.cambiarEstatus);
 router.patch('/:id/estatus', upload.single('comprobante'), SolicitudController.cambiarEstatus);
 

@@ -19,6 +19,142 @@ code {
   padding: 24px;
 }
 
+/* ============================================
+   RESPONSIVE: Ajustes para pantallas móviles
+   ============================================ */
+@media (max-width: 768px) {
+  .dashboard, .formulario-solicitud {
+    padding: 12px !important;
+  }
+
+  /* Header del Dashboard */
+  .dashboard-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+  .dashboard-header-info {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+  .dashboard-header-info .user-info {
+    text-align: left !important;
+  }
+
+  /* Cards de estadísticas: 2 por fila bien ajustadas */
+  .ant-statistic-title {
+    font-size: 11px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ant-statistic-content {
+    font-size: 18px !important;
+  }
+  .ant-statistic-content-prefix {
+    font-size: 16px !important;
+  }
+
+  /* Card del historial */
+  .ant-card-head {
+    padding: 8px 12px !important;
+    min-height: auto !important;
+  }
+  .ant-card-head-title {
+    font-size: 14px !important;
+    padding: 8px 0 !important;
+  }
+  .ant-card-extra {
+    display: none !important;
+  }
+  .ant-card-body {
+    padding: 8px !important;
+  }
+
+  /* Filtros móviles dentro del card body */
+  .mobile-filters {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .mobile-filters .ant-select {
+    width: 100% !important;
+  }
+  .mobile-filters .ant-btn {
+    width: 100%;
+  }
+  .mobile-filters .filter-buttons-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .mobile-filters .filter-buttons-row .btn-full {
+    grid-column: 1 / -1;
+  }
+
+  /* Desktop filters */
+  .desktop-filters {
+    display: none !important;
+  }
+
+  /* Tabla responsiva */
+  .ant-table {
+    font-size: 12px !important;
+  }
+  .ant-table-thead > tr > th {
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+  }
+  .ant-table-tbody > tr > td {
+    padding: 8px 6px !important;
+    font-size: 12px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Paginación compacta */
+  .ant-pagination {
+    justify-content: center !important;
+  }
+  .ant-pagination-options {
+    display: none !important;
+  }
+  .ant-pagination-item {
+    min-width: 28px !important;
+    height: 28px !important;
+    line-height: 28px !important;
+    font-size: 12px !important;
+  }
+  .ant-pagination-prev, .ant-pagination-next {
+    min-width: 28px !important;
+    height: 28px !important;
+  }
+
+  /* Modales a pantalla completa en móvil */
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .ant-modal-body {
+    padding: 12px !important;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}
+
+/* Garantizar que en desktop se mantenga el diseño normal */
+@media (min-width: 769px) {
+  .mobile-filters {
+    display: none !important;
+  }
+  .desktop-filters {
+    display: flex !important;
+  }
+}
+
 @media print {
   /* Ocultar elementos que no deben salir en la impresión */
   .ant-menu, .ant-layout-sider, .ant-btn, .ant-modal, .ant-upload-hint {

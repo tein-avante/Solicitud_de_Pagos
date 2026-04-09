@@ -52,6 +52,22 @@ const Proveedor = sequelize.define('Proveedor', {
         type: DataTypes.STRING,
         allowNull: true
     },
+    bancoPago: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    telefonoPago: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    rifPago: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    emailPago: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
 
     activo: {
         type: DataTypes.BOOLEAN,

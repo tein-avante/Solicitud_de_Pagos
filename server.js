@@ -24,6 +24,19 @@ const proveedorRoutes = require('./routes/proveedores');
 const notificacionRoutes = require('./routes/notificaciones');
 const bancoRoutes = require('./routes/bancos');
 const departamentoRoutes = require('./routes/departamentos');
+let cajaChicaRoutes, pagosDirectosRoutes, reporteFinanzasRoutes, setupAssociations;
+
+try { cajaChicaRoutes = require('./routes/caja-chica'); console.log('[OK] caja-chica routes cargado'); }
+catch(e) { console.error('[CRASH] caja-chica routes FALLO:', e.message); }
+
+try { pagosDirectosRoutes = require('./routes/pagos-directos'); console.log('[OK] pagos-directos routes cargado'); }
+catch(e) { console.error('[CRASH] pagos-directos routes FALLO:', e.message); }
+
+try { reporteFinanzasRoutes = require('./routes/reporte-finanzas'); console.log('[OK] reporte-finanzas routes cargado'); }
+catch(e) { console.error('[CRASH] reporte-finanzas routes FALLO:', e.message); }
+
+try { setupAssociations = require('./associations'); setupAssociations(); console.log('[OK] associations cargado y ejecutado'); }
+catch(e) { console.error('[CRASH] associations FALLO:', e.message); }
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +92,9 @@ app.use('/api/proveedores', proveedorRoutes);   // Maestro de Proveedores
 app.use('/api/notificaciones', notificacionRoutes); // Sistema de Notificaciones
 app.use('/api/bancos', bancoRoutes);            // Entidades Bancarias
 app.use('/api/departamentos', departamentoRoutes); // Maestro de Departamentos
+app.use('/api/caja-chica', cajaChicaRoutes ? cajaChicaRoutes : (req, res) => res.status(503).json({ error: 'Módulo Caja Chica no disponible' }));
+app.use('/api/pagos-directos', pagosDirectosRoutes ? pagosDirectosRoutes : (req, res) => res.status(503).json({ error: 'Módulo Pagos Directos no disponible' }));
+app.use('/api/finanzas', reporteFinanzasRoutes ? reporteFinanzasRoutes : (req, res) => res.status(503).json({ error: 'Módulo Finanzas no disponible' }));
 
 // Servir archivos estáticos (documentos cargados/uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -136,7 +152,6 @@ async function start(retries = 5) {
 
             // Inicializar configuración del sistema (Versión y Contador)
             await sistemaService.inicializar();
-
 
             // --- MECANISMO DE KEEP-ALIVE PARA LA BASE DE DATOS ---
             // Realiza un ping a la base de datos cada 10 minutos para evitar que MySQL 

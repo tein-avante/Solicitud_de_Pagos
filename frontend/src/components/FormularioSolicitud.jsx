@@ -47,6 +47,7 @@ import moment from 'moment';
 import api from '../services/api';
 import logo from '../assets/logo.png';
 import { ThemeContext } from '../context/ThemeContext';
+import DistribucionCentrosCosto from './DistribucionCentrosCosto';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -59,6 +60,9 @@ const FormularioSolicitud = () => {
   const [proveedores, setProveedores] = useState([]);
   const [comentario, setComentario] = useState('');
   const [fileList, setFileList] = useState([]);
+  const [distribucion, setDistribucion] = useState([]);
+  const [montoActual, setMontoActual] = useState(0);
+  const [monedaActual, setMonedaActual] = useState('USD');
   const { id } = useParams();
   const navigate = useNavigate();
   const { isDarkMode } = useContext(ThemeContext);
@@ -113,11 +117,24 @@ const FormularioSolicitud = () => {
         fechaSolicitud: moment(data.fechaSolicitud),
         fechaLimiteRequerida: moment(data.fechaLimiteRequerida),
         proveedorId: data.proveedor?.id,
-        centroCosto: data.centroCosto,
         montoTotal: Number(data.montoTotal),
         elaboradoPorNombre: data.elaboradoPor?.nombre || 'N/A',
-        tiposSoporte: Array.isArray(data.tiposSoporte) ? data.tiposSoporte : (data.tiposSoporte ? [data.tiposSoporte] : [])
+        tiposSoporte: Array.isArray(data.tiposSoporte) ? data.tiposSoporte : (data.tiposSoporte ? [data.tiposSoporte] : []),
+        tasaBCV: data.tasaBCV ? Number(data.tasaBCV) : undefined
       });
+      setMontoActual(Number(data.montoTotal));
+      setMonedaActual(data.moneda || 'USD');
+      // Cargar distribución de centros de costo si existe
+      if (Array.isArray(data.distribucionCentros) && data.distribucionCentros.length > 0) {
+        const dist = data.distribucionCentros.map((d, i) => ({
+          key: d.id || Date.now() + i,
+          centroCostoId: d.centroCostoId,
+          monto: d.monto,
+          porcentaje: d.porcentaje,
+          descripcion: d.descripcion || ''
+        }));
+        setDistribucion(dist);
+      }
       setFileList([]); // Reset file list for new uploads
     } catch (e) { message.error('Error al cargar detalle'); }
     finally { setLoading(false); }
@@ -146,20 +163,19 @@ const FormularioSolicitud = () => {
     }
   };
 
-  /**
-   * Al cambiar el proveedor, autocompletamos los datos bancarios si existen
-   */
   const handleCambioProveedor = (id) => {
     const prov = proveedores.find(p => p.id === id);
-    if (prov && (prov.banco || prov.cuenta)) {
-      const coordinates = `${prov.banco || ''} ${prov.cuenta || ''}`.trim();
-      if (coordinates) {
-        form.setFieldsValue({
-          datosBancarios: {
-            coordenadas: coordinates
-          }
-        });
-      }
+    if (prov) {
+      form.setFieldsValue({
+        datosBancarios: {
+          banco: prov.banco,
+          bancoPago: prov.bancoPago,
+          cuenta: prov.cuenta,
+          telefonoPago: prov.telefonoPago,
+          rifPago: prov.rifPago,
+          emailPago: prov.emailPago
+        }
+      });
     }
   };
 
@@ -172,34 +188,44 @@ const FormularioSolicitud = () => {
     try {
       const provCompleto = proveedores.find(p => p.id === values.proveedorId);
 
-      if (esEdicion) {
-        // En edición mantenemos el envío JSON por ahora para simplificar, 
-        // ya que la carga de archivos se centra en la creación según el reporte.
-        const payload = { ...values, proveedor: provCompleto };
-        await api.put(`/solicitudes/${id}`, payload);
-        message.success('Solicitud actualizada');
-      } else {
-        const formData = new FormData();
-        Object.keys(values).forEach(key => {
-          if (values[key] !== undefined) {
-            if (key === 'fechaSolicitud' || key === 'fechaLimiteRequerida') {
-              formData.append(key, values[key].toISOString());
-            } else if (key === 'proveedorId') {
-              formData.append('proveedor', JSON.stringify(provCompleto));
-            } else if (key === 'tiposSoporte') {
-              formData.append('tiposSoporte', JSON.stringify(values[key] || []));
-            } else if (key === 'datosBancarios') {
-              formData.append('datosBancarios', JSON.stringify(values[key] || {}));
-            } else {
-              formData.append(key, values[key]);
-            }
+      const formData = new FormData();
+
+      // Procesar valores del formulario
+      Object.keys(values).forEach(key => {
+        if (values[key] !== undefined && values[key] !== null) {
+          if (key === 'fechaSolicitud' || key === 'fechaLimiteRequerida') {
+            formData.append(key, values[key].toISOString());
+          } else if (key === 'proveedorId') {
+            formData.append('proveedor', JSON.stringify(provCompleto));
+          } else if (key === 'tiposSoporte') {
+            formData.append('tiposSoporte', JSON.stringify(values[key] || []));
+          } else if (key === 'datosBancarios') {
+            formData.append('datosBancarios', JSON.stringify(values[key] || {}));
+          } else {
+            formData.append(key, values[key]);
           }
-        });
+        }
+      });
 
-        fileList.forEach(file => {
+      // Agregar distribución de centros de costo (Vital para persistencia)
+      if (distribucion && distribucion.length > 0) {
+        formData.append('distribucionCentros', JSON.stringify(distribucion));
+      }
+
+      // Agregar archivos nuevos si los hay
+      fileList.forEach(file => {
+        if (file.originFileObj) {
           formData.append('soportes', file.originFileObj);
-        });
+        }
+      });
 
+      if (esEdicion) {
+        await api.put(`/solicitudes/${id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        message.success('Solicitud actualizada correctamente');
+        if (typeof cargarDetalleSolicitud === 'function') cargarDetalleSolicitud(id);
+      } else {
         const res = await api.post('/solicitudes', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -207,8 +233,8 @@ const FormularioSolicitud = () => {
         navigate(`/solicitudes/${res.data.solicitud.id}`);
       }
     } catch (e) {
-      console.error(e);
-      message.error('No se pudo guardar la solicitud');
+      console.error('[ON_FINISH ERROR]', e);
+      message.error(e.response?.data?.error || 'No se pudo guardar la solicitud');
     }
     setLoading(false);
   };
@@ -321,8 +347,8 @@ const FormularioSolicitud = () => {
   const puedeEditar = !esEdicion || (['Creado', 'Devuelto', 'Anulado', 'Pendiente'].includes(solicitud?.estatus));
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center' }}>
+    <div className="formulario-solicitud" style={{ padding: 24, maxWidth: 1200, margin: '0 auto', overflowX: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>Volver</Button>
         <img src={logo} style={{ height: 60 }} alt="Logo" />
         <Space>
@@ -340,8 +366,8 @@ const FormularioSolicitud = () => {
         </Space>
       </div>
 
-      <Row gutter={24}>
-        <Col span={esEdicion ? 16 : 24}>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={esEdicion ? 16 : 24}>
           <Card loading={loading}>
             <Form form={form} layout="vertical" onFinish={onFinish} disabled={!puedeEditar}>
               {solicitud?.estatus === 'Devuelto' && (
@@ -373,22 +399,22 @@ const FormularioSolicitud = () => {
               )}
               <Divider orientation="left">1. Información de la Unidad</Divider>
               <Row gutter={16}>
-                <Col span={8}><Form.Item label="Correlativo" name="correlativo"><Input disabled placeholder="Auto-generado" /></Form.Item></Col>
-                <Col span={8}><Form.Item label="Fecha de Solicitud" name="fechaSolicitud"><DatePicker disabled style={{ width: '100%' }} /></Form.Item></Col>
-                <Col span={8}><Form.Item label="Elaborado por" name="elaboradoPorNombre"><Input disabled /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Correlativo" name="correlativo"><Input disabled placeholder="Auto-generado" /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Fecha de Solicitud" name="fechaSolicitud"><DatePicker disabled style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Elaborado por" name="elaboradoPorNombre"><Input disabled /></Form.Item></Col>
               </Row>
               <Row gutter={16}>
-                <Col span={12}><Form.Item label="Unidad Solicitante" name="unidadSolicitante"><Input disabled /></Form.Item></Col>
-                <Col span={12}><Form.Item label="N° de Requerimiento Asociado" name="numeroRequerimiento"><Input /></Form.Item></Col>
+                <Col xs={24} md={12}><Form.Item label="Unidad Solicitante" name="unidadSolicitante"><Input disabled /></Form.Item></Col>
+                <Col xs={24} md={12}><Form.Item label="N° de Requerimiento Asociado" name="numeroRequerimiento"><Input /></Form.Item></Col>
               </Row>
 
               <Row gutter={16}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="Fecha Límite Requerida" name="fechaLimiteRequerida" rules={[{ required: true }]}>
                     <DatePicker style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="Nivel de Prioridad" name="nivelPrioridad" rules={[{ required: true }]}>
                     <Select>
                       <Select.Option value="Planificada">Planificada</Select.Option>
@@ -409,39 +435,100 @@ const FormularioSolicitud = () => {
 
               <Divider orientation="left">3. Datos del Proveedor y Monto</Divider>
               <Row gutter={16}>
-                <Col span={14}>
+                <Col xs={24} md={24}>
                   <Form.Item label="Proveedor" name="proveedorId" rules={[{ required: true }]}>
                     <Select showSearch optionFilterProp="children" onChange={handleCambioProveedor}>
-                      {(Array.isArray(proveedores) ? proveedores : []).map(p => (
-                        <Select.Option key={p.id} value={p.id}>{p.razonSocial} ({p.rif})</Select.Option>
-                      ))}
+                      {(() => {
+                        const opts = [...(Array.isArray(proveedores) ? proveedores : [])];
+                        // Si la solicitud tiene un proveedor guardado y este no está en la lista de activos, lo agregamos para visualización
+                        if (solicitud?.proveedor?.id && !opts.find(p => p.id === solicitud.proveedor.id)) {
+                          opts.push(solicitud.proveedor);
+                        }
+                        return opts.map(p => (
+                          <Select.Option key={p.id} value={p.id}>{p.razonSocial} ({p.rif})</Select.Option>
+                        ));
+                      })()}
                     </Select>
                   </Form.Item>
 
-                </Col>
-                <Col span={10}>
-                  <Form.Item label="Centro de Costo" name="centroCosto" rules={[{ required: true }]}>
-                    <Select showSearch optionFilterProp="children">
-                      {(Array.isArray(centros) ? centros : []).map(c => <Select.Option key={c.id} value={c.nombre}>{c.nombre}</Select.Option>)}
-                    </Select>
-                  </Form.Item>
                 </Col>
               </Row>
 
+              {/* Distribución de Centros de Costo */}
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, curr) => prev.montoTotal !== curr.montoTotal || prev.moneda !== curr.moneda}
+              >
+                {({ getFieldValue }) => {
+                  const monto = getFieldValue('montoTotal') || 0;
+                  const moneda = getFieldValue('moneda') || 'USD';
+                  return (
+                    centros.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <DistribucionCentrosCosto
+                          total={monto}
+                          centros={centros}
+                          onChange={setDistribucion}
+                          moneda={moneda}
+                          initialLines={distribucion}
+                        />
+                      </div>
+                    )
+                  );
+                }}
+              </Form.Item>
+
               <Row gutter={16}>
-                <Col span={8}><Form.Item label="Monto Total" name="montoTotal" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} precision={2} min={0} /></Form.Item></Col>
-                <Col span={4}><Form.Item label="Moneda" name="moneda" rules={[{ required: true }]}><Select><Select.Option value="USD">USD</Select.Option><Select.Option value="Bs">Bs</Select.Option><Select.Option value="EUR">EUR</Select.Option></Select></Form.Item></Col>
-                <Col span={12}><Form.Item label="Método de Pago" name="metodoPago" rules={[{ required: true }]}><Select><Select.Option value="Transferencia">Transferencia</Select.Option><Select.Option value="Pago Movil">Pago Móvil</Select.Option><Select.Option value="Efectivo">Efectivo</Select.Option><Select.Option value="e-pay">e-pay</Select.Option></Select></Form.Item></Col>
+                <Col xs={24} sm={12} md={8}><Form.Item label="Monto Total" name="montoTotal" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} precision={2} min={0} /></Form.Item></Col>
+                <Col xs={24} sm={12} md={4}><Form.Item label="Moneda" name="moneda" rules={[{ required: true }]}><Select><Select.Option value="USD">USD</Select.Option><Select.Option value="Bs">Bs</Select.Option><Select.Option value="EUR">EUR</Select.Option></Select></Form.Item></Col>
+                <Col xs={24} md={12}><Form.Item label="Método de Pago" name="metodoPago" rules={[{ required: true }]}><Select><Select.Option value="Transferencia">Transferencia</Select.Option><Select.Option value="Pago Movil">Pago Móvil</Select.Option><Select.Option value="Efectivo">Efectivo</Select.Option><Select.Option value="e-pay">e-pay</Select.Option></Select></Form.Item></Col>
               </Row>
               <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.metodoPago !== currentValues.metodoPago}>
                 {({ getFieldValue }) => {
                   const metodo = getFieldValue('metodoPago');
-                  if (['Transferencia', 'Pago Movil', 'e-pay'].includes(metodo)) {
+                  if (metodo === 'Transferencia') {
+                    return (
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="Banco" name={['datosBancarios', 'banco']} rules={[{ required: true }]}>
+                            <Input placeholder="Ej: Mercantil" />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item label="Número de Cuenta" name={['datosBancarios', 'cuenta']} rules={[{ required: true }]}>
+                            <Input placeholder="0105..." />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    );
+                  }
+                  if (metodo === 'Pago Movil') {
+                    return (
+                      <Row gutter={16}>
+                        <Col span={8}>
+                          <Form.Item label="Banco" name={['datosBancarios', 'bancoPago']} rules={[{ required: true }]}>
+                            <Input placeholder="Ej: Mercantil" />
+                          </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                          <Form.Item label="Teléfono" name={['datosBancarios', 'telefonoPago']} rules={[{ required: true }]}>
+                            <Input placeholder="0412..." />
+                          </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                          <Form.Item label="RIF/Cédula" name={['datosBancarios', 'rifPago']} rules={[{ required: true }]}>
+                            <Input placeholder="V..." />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    );
+                  }
+                  if (metodo === 'e-pay') {
                     return (
                       <Row gutter={16}>
                         <Col span={24}>
-                          <Form.Item label="Coordenadas o Credenciales" name={['datosBancarios', 'coordenadas']} rules={[{ required: true, message: 'Requerido para el método de pago seleccionado' }]}>
-                            <Input.TextArea rows={2} placeholder="Ingrese números de cuenta, teléfonos, RIF, correo u otros datos necesarios para el pago" />
+                          <Form.Item label="Correo e-pay" name={['datosBancarios', 'emailPago']} rules={[{ required: true, type: 'email' }]}>
+                            <Input placeholder="pago@e-pay.com" />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -453,30 +540,45 @@ const FormularioSolicitud = () => {
 
               {solicitud?.tasaBCV && (
                 <Row gutter={16}>
-                  <Col span={8}>
-                    <Form.Item label="Tasa BCV del Pago" name="tasaBCV">
-                      <InputNumber style={{ width: '100%' }} disabled precision={4} />
-                    </Form.Item>
+                  <Col xs={24} md={12}>
+                    <div style={{
+                      background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                      border: '1px solid #52c41a',
+                      borderRadius: 8,
+                      padding: '12px 16px',
+                      marginBottom: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10
+                    }}>
+                      <DollarOutlined style={{ fontSize: 20, color: '#52c41a' }} />
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>TASA BCV AL MOMENTO DEL PAGO</Text>
+                        <Text strong style={{ fontSize: 18, color: '#237804' }}>
+                          Bs. {Number(solicitud.tasaBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                        </Text>
+                      </div>
+                    </div>
                   </Col>
                 </Row>
               )}
 
               <Divider orientation="left">4. Soportes Adicionales (Layout PDF)</Divider>
               <Row gutter={16}>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="Tipos de Soporte" name="tiposSoporte">
                     <Checkbox.Group style={{ width: '100%' }}>
                       <Row>
-                        <Col span={12}><Checkbox value="FACTURA">FACTURA</Checkbox></Col>
-                        <Col span={12}><Checkbox value="NOTA DE ENTREGA">NOTA DE ENTREGA</Checkbox></Col>
-                        <Col span={12}><Checkbox value="PRESUPUESTO">PRESUPUESTO</Checkbox></Col>
-                        <Col span={12}><Checkbox value="OBLIGACIONES">OBLIGACIONES</Checkbox></Col>
-                        <Col span={12}><Checkbox value="OTROS">OTROS</Checkbox></Col>
+                        <Col xs={12} md={12}><Checkbox value="FACTURA">FACTURA</Checkbox></Col>
+                        <Col xs={12} md={12}><Checkbox value="NOTA DE ENTREGA">NOTA DE ENTREGA</Checkbox></Col>
+                        <Col xs={12} md={12}><Checkbox value="PRESUPUESTO">PRESUPUESTO</Checkbox></Col>
+                        <Col xs={12} md={12}><Checkbox value="OBLIGACIONES">OBLIGACIONES</Checkbox></Col>
+                        <Col xs={12} md={12}><Checkbox value="OTROS">OTROS</Checkbox></Col>
                       </Row>
                     </Checkbox.Group>
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col xs={24} md={12}>
                   <Form.Item label="N° Orden de Compra" name="numeroOrdenCompra">
                     <Input placeholder="Ej: OC-001" />
                   </Form.Item>
@@ -639,7 +741,7 @@ const FormularioSolicitud = () => {
             {esEdicion && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor' || usuario?.rol === 'Gestor') && (
               <div style={{ marginTop: 20, padding: 20, border: '1px solid #d9d9d9', borderRadius: 8, textAlign: 'center' }}>
                 <Title level={5}>Acciones de Revisión</Title>
-                <Space size="middle">
+                <Space size="middle" wrap style={{ justifyContent: 'center' }}>
                   {/* ACCIONES DEL GESTOR (GERENTE) */}
                   {usuario?.rol === 'Gestor' && solicitud?.estatus === 'Pendiente' && (
                     <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Autorizado')} style={{ backgroundColor: '#722ed1' }}>Autorizar</Button>
@@ -679,8 +781,8 @@ const FormularioSolicitud = () => {
         </Col>
 
         {esEdicion && (
-          <Col span={8}>
-            <Card title="Historial y Comentarios" style={{ height: '100%' }}>
+          <Col xs={24} lg={8}>
+            <Card title="Historial y Comentarios" style={{ height: '100%', marginTop: '16px' }}>
               <Timeline mode="left">
                 {(Array.isArray(solicitud?.historial) ? solicitud.historial : []).map((h, i) => (
                   <Timeline.Item key={i} label={moment(h.fecha).format('DD/MM HH:mm')}>

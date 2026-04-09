@@ -64,18 +64,22 @@ class ProveedorController {
         try {
             const XLSX = require('xlsx');
             // Definimos los encabezados exactos que espera el sistema por defecto
-            const headers = ['Razón Social', 'RIF / C.I', 'Dirección Fiscal', 'Teléfono', 'Email', 'Banco', 'Número de Cuenta'];
+            const headers = [
+                'Razón Social', 'RIF / C.I Fiscal', 'Dirección Fiscal', 'Teléfono Contacto', 'Email Contacto', 
+                'Banco Transferencia', 'Cuenta Transferencia', 
+                'Banco Pago Móvil', 'Teléfono Pago Móvil', 'C.I/RIF Pago Móvil', 
+                'Correo e-pay'
+            ];
             const data = [headers];
 
             const ws = XLSX.utils.aoa_to_sheet(data);
             
             // Ajustar ancho de columnas para que se vea bien
             ws['!cols'] = [
-                { wch: 30 }, // Razón Social
-                { wch: 15 }, // RIF
-                { wch: 40 }, // Dirección
-                { wch: 15 }, // Teléfono
-                { wch: 25 }  // Email
+                { wch: 30 }, { wch: 15 }, { wch: 40 }, { wch: 15 }, { wch: 25 },
+                { wch: 20 }, { wch: 25 },
+                { wch: 20 }, { wch: 20 }, { wch: 20 },
+                { wch: 25 }
             ];
 
             const wb = XLSX.utils.book_new();
@@ -128,6 +132,7 @@ class ProveedorController {
                 try {
                     // Mapeo flexible de columnas
                     let razonSocial, rif, direccionFiscal, telefono, email, banco, cuenta;
+                    let bancoPago, telefonoPago, rifPago, emailPago;
 
                     Object.keys(row).forEach(key => {
                         const kn = normalizar(key);
@@ -135,7 +140,20 @@ class ProveedorController {
 
                         if (kn.includes('razon') || kn.includes('nombre') || kn.includes('empresa')) {
                             razonSocial = val;
-                        } else if (kn.includes('rif') || kn.includes('cedula') || kn.includes('id') || kn.includes('ci')) {
+                        } 
+                        // Pago Móvil y e-pay (Evaluarlos antes que los genéricos)
+                        else if (kn.includes('movil') && (kn.includes('banco') || kn.includes('entidad'))) {
+                            bancoPago = val?.toString();
+                        } else if (kn.includes('movil') && (kn.includes('telefono') || kn.includes('celular') || kn.includes('telf'))) {
+                            telefonoPago = val?.toString();
+                        } else if (kn.includes('movil') && (kn.includes('rif') || kn.includes('cedula') || kn.includes('ci'))) {
+                            rifPago = val?.toString();
+                        } else if (kn.includes('epay') || kn.includes('e-pay') || (kn.includes('correo') && kn.includes('pay'))) {
+                            emailPago = val?.toString();
+                        } 
+                        // Campos estándar fiscales/contacto/transferencia
+                        else if ((kn.includes('rif') || kn.includes('cedula')) || 
+                                   ((kn === 'ci' || kn === 'id' || kn.startsWith('ci ') || kn.endsWith(' ci')) && !kn.includes('direcion'))) {
                             rif = val?.toString();
                         } else if (kn.includes('direcion') || kn.includes('fiscal') || kn.includes('ubicacion')) {
                             direccionFiscal = val;
@@ -159,26 +177,36 @@ class ProveedorController {
                     // Limpiar RIF de cualquier carácter no alfanumérico para la búsqueda
                     const rifLimpio = rif.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
+                    const objData = {
+                        razonSocial, 
+                        direccionFiscal: direccionFiscal || '', 
+                        telefono: telefono || '', 
+                        email: (email && email.toString().trim() !== '') ? email.toString().trim() : null,
+                        banco: banco || null,
+                        cuenta: cuenta || null,
+                        bancoPago: bancoPago || null,
+                        telefonoPago: telefonoPago || null,
+                        rifPago: rifPago || null,
+                        emailPago: emailPago || null
+                    };
+
                     const [proveedor, created] = await Proveedor.findOrCreate({
                         where: { rif: rifLimpio },
-                        defaults: { 
-                            razonSocial, 
-                            direccionFiscal: direccionFiscal || '', 
-                            telefono: telefono || '', 
-                            email: (email && email.toString().trim() !== '') ? email.toString().trim() : null,
-                            banco: banco || null,
-                            cuenta: cuenta || null
-                        }
+                        defaults: objData
                     });
 
                     if (!created) {
                         await proveedor.update({ 
-                            razonSocial, 
-                            direccionFiscal: direccionFiscal || proveedor.direccionFiscal, 
-                            telefono: telefono || proveedor.telefono, 
-                            email: (email && email.toString().trim() !== '') ? email.toString().trim() : proveedor.email,
+                            ...objData,
+                            direccionFiscal: direccionFiscal || proveedor.direccionFiscal,
+                            telefono: telefono || proveedor.telefono,
+                            email: email ? objData.email : proveedor.email,
                             banco: banco || proveedor.banco,
-                            cuenta: cuenta || proveedor.cuenta
+                            cuenta: cuenta || proveedor.cuenta,
+                            bancoPago: bancoPago || proveedor.bancoPago,
+                            telefonoPago: telefonoPago || proveedor.telefonoPago,
+                            rifPago: rifPago || proveedor.rifPago,
+                            emailPago: emailPago || proveedor.emailPago
                         });
                         resultados.actualizados++;
                     } else {

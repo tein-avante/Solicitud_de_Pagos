@@ -62,11 +62,6 @@ const Solicitud = sequelize.define('Solicitud', {
     numeroOrdenCompra: {
         type: DataTypes.STRING
     },
-    // Centro de costo imputado (e.g. Administración, Ventas)
-    centroCosto: {
-        type: DataTypes.STRING,
-        allowNull: false
-    },
     // Datos completos del proveedor (se guardan como JSON para snapshot histórico)
     proveedor: {
         type: DataTypes.JSON,

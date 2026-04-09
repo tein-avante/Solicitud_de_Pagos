@@ -1,5 +1,6 @@
 const Usuario = require('../models/Usuario');
 const sistemaService = require('../services/sistemaService');
+const bcrypt = require('bcrypt');
 
 
 class UsuarioController {

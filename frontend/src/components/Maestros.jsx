@@ -18,7 +18,9 @@ import {
     Select,
     Typography,
     Popconfirm,
-    Upload
+    Upload,
+    Divider,
+    Tag
 } from 'antd';
 import {
     PlusOutlined,
@@ -207,12 +209,21 @@ const Maestros = () => {
             return (
                 <>
                     <Form.Item name="razonSocial" label="Razón Social" rules={[{ required: true }]}><Input /></Form.Item>
-                    <Form.Item name="rif" label="RIF / C.I" rules={[{ required: true }]}><Input /></Form.Item>
+                    <Form.Item name="rif" label="RIF / C.I Fiscal" rules={[{ required: true }]}><Input /></Form.Item>
                     <Form.Item name="direccionFiscal" label="Dirección Fiscal"><Input /></Form.Item>
-                    <Form.Item name="telefono" label="Teléfono"><Input /></Form.Item>
-                    <Form.Item name="email" label="Correo Electrónico"><Input /></Form.Item>
+                    <Form.Item name="telefono" label="Teléfono de Contacto"><Input /></Form.Item>
+                    <Form.Item name="email" label="Correo de Contacto"><Input /></Form.Item>
+                    
+                    <Divider style={{ margin: '12px 0' }} orientation="left">Datos para Transferencias</Divider>
                     <Form.Item name="banco" label="Banco"><Input /></Form.Item>
                     <Form.Item name="cuenta" label="Número de Cuenta"><Input /></Form.Item>
+
+                    <Divider style={{ margin: '12px 0' }} orientation="left">Datos para Pago Móvil / E-pay</Divider>
+                    <Form.Item name="bancoPago" label="Banco (Pago Móvil)"><Input placeholder="Ej: Mercantil" /></Form.Item>
+                    <Form.Item name="telefonoPago" label="Teléfono (Pago Móvil)"><Input placeholder="Ej: 04121234567" /></Form.Item>
+                    <Form.Item name="rifPago" label="Cédula/RIF (Pago Móvil)"><Input placeholder="Ej: V12345678" /></Form.Item>
+                    
+                    <Form.Item name="emailPago" label="Correo e-pay"><Input placeholder="Ej: pago@empresa.com" /></Form.Item>
 
                 </>
             );
@@ -279,11 +290,28 @@ const Maestros = () => {
                             <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Proveedor</Button>
                             <Button icon={<UploadOutlined />} onClick={() => setBulkModalVisible(true)}>Carga Masiva</Button>
                         </Space>
-                        <Table dataSource={proveedores} rowKey="id" loading={loading} columns={[
+                        <Table dataSource={proveedores} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Razón Social', dataIndex: 'razonSocial' },
                             { title: 'RIF', dataIndex: 'rif' },
                             { title: 'Banco', dataIndex: 'banco' },
                             { title: 'Cuenta', dataIndex: 'cuenta' },
+                            { 
+                                title: 'Pago Móvil', 
+                                render: (_, r) => {
+                                    if(r.telefonoPago || r.rifPago) {
+                                       return <div>
+                                            {r.bancoPago && <small style={{ display: 'block' }}><b>Bco:</b> {r.bancoPago}</small>}
+                                            <small style={{ display: 'block' }}><b>Telf:</b> {r.telefonoPago}</small>
+                                            <small style={{ display: 'block' }}><b>C.I/RIF:</b> {r.rifPago}</small>
+                                        </div>;
+                                    }
+                                    return '-';
+                                }
+                            },
+                            { 
+                                title: 'e-pay', 
+                                render: (_, r) => r.emailPago ? <small>{r.emailPago}</small> : '-'
+                            },
 
                             {
                                 title: 'Acciones', render: (_, r) => (
@@ -297,7 +325,7 @@ const Maestros = () => {
                     </TabPane>
                     <TabPane tab={<span><AppstoreOutlined /> Centros de Costo</span>} key="2">
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Centro</Button>
-                        <Table dataSource={centros} rowKey="id" loading={loading} columns={[
+                        <Table dataSource={centros} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Nombre', dataIndex: 'nombre' },
                             { title: 'Código', dataIndex: 'codigo' },
                             {
@@ -312,7 +340,7 @@ const Maestros = () => {
                     </TabPane>
                     <TabPane tab={<span><AppstoreOutlined /> Departamentos</span>} key="4">
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Departamento</Button>
-                        <Table dataSource={departamentos} rowKey="id" loading={loading} columns={[
+                        <Table dataSource={departamentos} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Nombre', dataIndex: 'nombre' },
                             { title: 'Código', dataIndex: 'codigo' },
                             {
@@ -328,7 +356,7 @@ const Maestros = () => {
                     {usuario?.rol?.toLowerCase() === 'administrador' && (
                         <TabPane tab={<span><UserOutlined /> Usuarios</span>} key="3">
                             <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Usuario</Button>
-                            <Table dataSource={usuarios} rowKey="id" loading={loading} columns={[
+                            <Table dataSource={usuarios} rowKey="id" loading={loading} pagination={false} columns={[
                                 { title: 'Nombre', dataIndex: 'nombre' },
                                 { title: 'Cargo', dataIndex: 'cargo' },
                                 { title: 'Email', dataIndex: 'email' },
