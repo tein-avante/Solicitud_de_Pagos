@@ -48,9 +48,12 @@ const Maestros = () => {
     const [loading, setLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [bulkModalVisible, setBulkModalVisible] = useState(false);
-    const [currentTab, setCurrentTab] = useState("1");
+    // Estados persistidos en localStorage
+    const savedMaestros = JSON.parse(localStorage.getItem('maestros_filtros') || '{}');
+    const [currentTab, setCurrentTab] = useState(savedMaestros.currentTab || "1");
     const [editItem, setEditItem] = useState(null);
     const [uploading, setUploading] = useState(false);
+    const [searchText, setSearchText] = useState(savedMaestros.searchText || "");
 
     // Obtener datos del usuario logueado
     const storedUser = localStorage.getItem('usuario');
@@ -68,6 +71,14 @@ const Maestros = () => {
             cargarDatos();
         }
     }, []);
+
+    // Guardar cambios en filtros de Maestros
+    useEffect(() => {
+        localStorage.setItem('maestros_filtros', JSON.stringify({
+            currentTab,
+            searchText
+        }));
+    }, [currentTab, searchText]);
 
     const cargarDatos = async () => {
         setLoading(true);
@@ -279,18 +290,40 @@ const Maestros = () => {
 
     };
 
+    // Lógica de filtrado dinámico
+    const getFilteredData = (data, fields) => {
+        if (!searchText) return data;
+        const lowerSearch = searchText.toLowerCase();
+        return data.filter(item => {
+            return fields.some(field => {
+                const val = item[field];
+                return val && String(val).toLowerCase().includes(lowerSearch);
+            });
+        });
+    };
+
     return (
         <div style={{ padding: 24 }}>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} style={{ marginBottom: 16 }}>Dashboard</Button>
 
             <Card title={<Title level={4}>Gestión de Tablas Maestras</Title>}>
-                <Tabs defaultActiveKey="1" onChange={setCurrentTab}>
+                <Tabs defaultActiveKey="1" activeKey={currentTab} onChange={(key) => { setCurrentTab(key); setSearchText(""); }}>
                     <TabPane tab={<span><ShopOutlined /> Proveedores</span>} key="1">
-                        <Space style={{ marginBottom: 16 }}>
-                            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Proveedor</Button>
-                            <Button icon={<UploadOutlined />} onClick={() => setBulkModalVisible(true)}>Carga Masiva</Button>
-                        </Space>
-                        <Table dataSource={proveedores} rowKey="id" loading={loading} pagination={false} columns={[
+                        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                            <Space>
+                                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Proveedor</Button>
+                                <Button icon={<UploadOutlined />} onClick={() => setBulkModalVisible(true)}>Carga Masiva</Button>
+                            </Space>
+                            <Input.Search
+                                placeholder="Buscar proveedor..."
+                                allowClear
+                                onSearch={setSearchText}
+                                onChange={e => setSearchText(e.target.value)}
+                                style={{ width: 300 }}
+                                value={searchText}
+                            />
+                        </div>
+                        <Table dataSource={getFilteredData(proveedores, ['razonSocial', 'rif', 'banco', 'cuenta', 'telefonoPago', 'rifPago', 'emailPago'])} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Razón Social', dataIndex: 'razonSocial' },
                             { title: 'RIF', dataIndex: 'rif' },
                             { title: 'Banco', dataIndex: 'banco' },
@@ -324,8 +357,18 @@ const Maestros = () => {
                         ]} />
                     </TabPane>
                     <TabPane tab={<span><AppstoreOutlined /> Centros de Costo</span>} key="2">
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Centro</Button>
-                        <Table dataSource={centros} rowKey="id" loading={loading} pagination={false} columns={[
+                        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Centro</Button>
+                            <Input.Search
+                                placeholder="Buscar centro..."
+                                allowClear
+                                onSearch={setSearchText}
+                                onChange={e => setSearchText(e.target.value)}
+                                style={{ width: 300 }}
+                                value={searchText}
+                            />
+                        </div>
+                        <Table dataSource={getFilteredData(centros, ['nombre', 'codigo'])} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Nombre', dataIndex: 'nombre' },
                             { title: 'Código', dataIndex: 'codigo' },
                             {
@@ -339,8 +382,18 @@ const Maestros = () => {
                         ]} />
                     </TabPane>
                     <TabPane tab={<span><AppstoreOutlined /> Departamentos</span>} key="4">
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Departamento</Button>
-                        <Table dataSource={departamentos} rowKey="id" loading={loading} pagination={false} columns={[
+                        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Departamento</Button>
+                            <Input.Search
+                                placeholder="Buscar departamento..."
+                                allowClear
+                                onSearch={setSearchText}
+                                onChange={e => setSearchText(e.target.value)}
+                                style={{ width: 300 }}
+                                value={searchText}
+                            />
+                        </div>
+                        <Table dataSource={getFilteredData(departamentos, ['nombre', 'codigo'])} rowKey="id" loading={loading} pagination={false} columns={[
                             { title: 'Nombre', dataIndex: 'nombre' },
                             { title: 'Código', dataIndex: 'codigo' },
                             {
@@ -355,8 +408,18 @@ const Maestros = () => {
                     </TabPane>
                     {usuario?.rol?.toLowerCase() === 'administrador' && (
                         <TabPane tab={<span><UserOutlined /> Usuarios</span>} key="3">
-                            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16 }}>Nuevo Usuario</Button>
-                            <Table dataSource={usuarios} rowKey="id" loading={loading} pagination={false} columns={[
+                            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>Nuevo Usuario</Button>
+                                <Input.Search
+                                    placeholder="Buscar usuario..."
+                                    allowClear
+                                    onSearch={setSearchText}
+                                    onChange={e => setSearchText(e.target.value)}
+                                    style={{ width: 300 }}
+                                    value={searchText}
+                                />
+                            </div>
+                            <Table dataSource={getFilteredData(usuarios, ['nombre', 'email', 'cargo', 'rol', 'departamento'])} rowKey="id" loading={loading} pagination={false} columns={[
                                 { title: 'Nombre', dataIndex: 'nombre' },
                                 { title: 'Cargo', dataIndex: 'cargo' },
                                 { title: 'Email', dataIndex: 'email' },

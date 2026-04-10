@@ -41,7 +41,8 @@ import {
   DollarOutlined,
   SendOutlined,
   BulbOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
 import api from '../services/api';
@@ -356,10 +357,11 @@ const FormularioSolicitud = () => {
           <Tag color={
             solicitud?.estatus === 'Autorizado' ? 'purple' :
               (solicitud?.estatus === 'Aprobado' ? 'green' :
-                (solicitud?.estatus === 'Pagado' ? 'cyan' :
-                  (solicitud?.estatus === 'Cerrado' ? 'gold' :
-                    (solicitud?.estatus === 'Devuelto' ? 'orange' :
-                      (solicitud?.estatus === 'Anulado' ? 'default' : 'blue')))))
+                (solicitud?.estatus === 'En Trámite' ? 'geekblue' :
+                  (solicitud?.estatus === 'Pagado' ? 'cyan' :
+                    (solicitud?.estatus === 'Cerrado' ? 'gold' :
+                      (solicitud?.estatus === 'Devuelto' ? 'orange' :
+                        (solicitud?.estatus === 'Anulado' ? 'default' : 'blue'))))))
           } style={{ fontSize: 14, padding: '4px 10px' }}>
             {solicitud?.estatus || 'NUEVA'}
           </Tag>
@@ -765,6 +767,12 @@ const FormularioSolicitud = () => {
                     <Button type="primary" icon={<DollarOutlined />} onClick={() => handleAccion('Pagado')}>Marcar como Pagada</Button>
                   )}
                   {solicitud?.estatus === 'Pagado' && usuario?.rol === 'Administrador' && (
+                    <>
+                      <Button icon={<ClockCircleOutlined />} onClick={() => handleAccion('En Trámite')} style={{ backgroundColor: '#2f54eb', color: 'white' }}>Marcar En Trámite</Button>
+                      <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Cerrado')} style={{ backgroundColor: '#faad14' }}>Cerrar Solicitud</Button>
+                    </>
+                  )}
+                  {solicitud?.estatus === 'En Trámite' && usuario?.rol === 'Administrador' && (
                     <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Cerrado')} style={{ backgroundColor: '#faad14' }}>Cerrar Solicitud</Button>
                   )}
                 </Space>

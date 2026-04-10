@@ -92,7 +92,7 @@ const Solicitud = sequelize.define('Solicitud', {
     },
     // Flujo: Pendiente -> Autorizado -> Aprobado -> Pagado -> Cerrado
     estatus: {
-        type: DataTypes.ENUM('Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado'),
+        type: DataTypes.ENUM('Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado'),
         defaultValue: 'Pendiente'
     },
     // IDs de los usuarios involucrados en cada etapa

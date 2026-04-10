@@ -476,6 +476,9 @@ class SolicitudController {
       const pagadas = await Solicitud.count({
         where: { ...where, estatus: 'Pagado' }
       });
+      const enTramite = await Solicitud.count({
+        where: { ...where, estatus: 'En Trámite' }
+      });
       const cerradas = await Solicitud.count({
         where: { ...where, estatus: 'Cerrado' }
       });
@@ -505,6 +508,7 @@ class SolicitudController {
         pendientes,
         aprobadas,
         pagadas,
+        enTramite,
         cerradas,
         porEstatus: statusCounts.map(s => ({
           name: (s.get('estatus') || 'Sin Estado').toUpperCase(),
@@ -635,7 +639,8 @@ class SolicitudController {
         'Pendiente': ['Autorizado', 'Rechazado', 'Devuelto', 'Anulado'],
         'Autorizado': ['Aprobado', 'Rechazado', 'Devuelto'],
         'Aprobado': ['Pagado', 'Rechazado', 'Devuelto'],
-        'Pagado': ['Cerrado'],
+        'Pagado': ['En Trámite', 'Cerrado'],
+        'En Trámite': ['Cerrado', 'Devuelto'],
         'Cerrado': [],
         'Rechazado': [],
         'Devuelto': ['Pendiente'],

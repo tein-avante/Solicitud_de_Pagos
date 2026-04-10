@@ -1,5 +1,37 @@
 # Historial de Cambios - Sistema de Solicitud de Pagos
 
+## 2026-04-10
+
+- **Estado "En Trámite" para Solicitudes Pagadas (Espera de Factura):**
+  - **Solicitud.js (Modelo):** Se añadió 'En Trámite' al ENUM de estatus para permitir el seguimiento de solicitudes pagadas que aún no tienen factura definitiva.
+  - **SolicitudController.js:**
+    - Se actualizó la máquina de estados para permitir transiciones desde `Aprobado` hacia `En Trámite`, y de `En Trámite` hacia `Pagado` o `Cerrado`.
+    - Se integró el conteo de solicitudes "En Trámite" en las estadísticas del Dashboard.
+  - **Dashboard.jsx:**
+    - Se añadió soporte visual para el nuevo estado (color `geekblue`).
+    - Se incorporaron botones de acción rápida para que Administradores y Auditores marquen solicitudes como "En Trámite" directamente desde la tabla.
+    - Se actualizó el filtro de estatus (escritorio y móvil) para incluir el nuevo estado.
+    - Se incluyó "En Trámite" en las opciones de generación del reporte de Relación de Solicitudes.
+  - **FormularioSolicitud.jsx:**
+    - Se actualizó el diseño del encabezado para mostrar el Tag correspondiente.
+    - Se añadió el botón de cambio de estado en el panel de revisión para roles autorizados.
+
+- **Persistencia de Filtros y Navegación (Mejora UX):**
+  - **Dashboard.jsx:**
+    - Se implementó el uso de `localStorage` para persistir los filtros de búsqueda (Proveedor, Departamento, Estatus, Centro de Costo) y la paginación (`currentPage`, `pageSize`).
+    - Ahora, al regresar de ver el detalle de una solicitud, el sistema restaura automáticamente la vista exactamente como estaba.
+  - **Maestros.jsx:**
+    - Se aplicó persistencia al texto de búsqueda (`searchText`) y a la pestaña activa (`currentTab`), manteniendo el contexto de trabajo al editar registros.
+- **Barra de Búsqueda en Tablas Maestras:**
+  - **Maestros.jsx:**
+    - Se implementó un estado global de búsqueda (`searchText`) que se reinicia al cambiar de pestaña (inicialmente, ahora persistido).
+    - Se añadieron componentes `Input.Search` en las cuatro pestañas (Proveedores, Centros de Costo, Departamentos y Usuarios).
+    - Se integró una función de filtrado dinámico (`getFilteredData`) que permite buscar por múltiples campos simultáneamente sin recargar la página:
+      - **Proveedores:** Razón Social, RIF, Banco, Cuenta, Teléfono y Correo.
+      - **Centros/Deptos:** Nombre y Código.
+      - **Usuarios:** Nombre, Email, Cargo, Rol y Departamento.
+    - El diseño de la cabecera de las tablas se ajustó para ser responsivo (`flex-wrap`) y mantener los botones de acción alineados con el buscador.
+
 ## 2026-04-09
 
 - **Migración Total a Múltiples Centros de Costo:**

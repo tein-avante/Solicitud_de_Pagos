@@ -19,7 +19,7 @@ async function actualizar() {
         // SQL para modificar el ENUM de estatus
         const queryEstatus = `
             ALTER TABLE ${tableName} 
-            MODIFY COLUMN estatus ENUM('Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado') 
+            MODIFY COLUMN estatus ENUM('Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado') 
             NOT NULL DEFAULT 'Pendiente';
         `;
         await sequelize.query(queryEstatus);

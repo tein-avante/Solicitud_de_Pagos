@@ -45,7 +45,8 @@ import {
   BulbFilled,
   BarChartOutlined,
   FilterOutlined,
-  WalletOutlined
+  WalletOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
@@ -62,7 +63,8 @@ const Dashboard = () => {
   const isLocal = window.location.port === '5173' || window.location.hostname === 'localhost';
   const fileBaseURL = isLocal ? `http://${window.location.hostname}:3000` : window.location.origin;
 
-  // ESTADOS PARA MANEJO DE DATOS Y UI
+  // ESTADOS PARA MANEJO DE DATOS Y UI (Persistidos en localStorage)
+  const savedFilters = JSON.parse(localStorage.getItem('dashboard_filtros') || '{}');
   const [loading, setLoading] = useState(false);
   const [solicitudes, setSolicitudes] = useState([]);
   const [estadisticas, setEstadisticas] = useState({});
@@ -73,19 +75,19 @@ const Dashboard = () => {
   const [modalEstadisticas, setModalEstadisticas] = useState(false);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
   const [fileListPagar, setFileListPagar] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(savedFilters.currentPage || 1);
+  const [pageSize, setPageSize] = useState(savedFilters.pageSize || 10);
   const [totalItems, setTotalItems] = useState(0);
 
   // Estados para Reportes con Filtro de Fecha
   const [modalReporte, setModalReporte] = useState(false);
   const [tipoReporteActual, setTipoReporteActual] = useState(null); // 'relacion' | 'xlsx' | 'pdf'
   const [rangoFechas, setRangoFechas] = useState([null, null]);
-  const [estatusReporte, setEstatusReporte] = useState(['Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
-  const [filtroProveedor, setFiltroProveedor] = useState(null);
-  const [filtroDepartamento, setFiltroDepartamento] = useState(null);
-  const [filtroEstatus, setFiltroEstatus] = useState('');
-  const [filtroCentroCosto, setFiltroCentroCosto] = useState(null);
+  const [estatusReporte, setEstatusReporte] = useState(['Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
+  const [filtroProveedor, setFiltroProveedor] = useState(savedFilters.filtroProveedor || null);
+  const [filtroDepartamento, setFiltroDepartamento] = useState(savedFilters.filtroDepartamento || null);
+  const [filtroEstatus, setFiltroEstatus] = useState(savedFilters.filtroEstatus || '');
+  const [filtroCentroCosto, setFiltroCentroCosto] = useState(savedFilters.filtroCentroCosto || null);
   const [proveedoresLista, setProveedoresLista] = useState([]);
   const [deptsLista, setDeptsLista] = useState([]);
   const [centrosCostoLista, setCentrosCostoLista] = useState([]);
@@ -100,11 +102,23 @@ const Dashboard = () => {
   const storedUser = localStorage.getItem('usuario');
   const usuario = storedUser ? JSON.parse(storedUser) : null;
   useEffect(() => {
-    cargarSolicitudes(1, 10);
+    cargarSolicitudes(currentPage, pageSize);
     cargarEstadisticas();
     cargarAuxiliares();
     cargarSistemaInfo();
   }, []);
+
+  // Efecto para persistir filtros en localStorage cada vez que cambien
+  useEffect(() => {
+    localStorage.setItem('dashboard_filtros', JSON.stringify({
+      currentPage,
+      pageSize,
+      filtroProveedor,
+      filtroDepartamento,
+      filtroEstatus,
+      filtroCentroCosto
+    }));
+  }, [currentPage, pageSize, filtroProveedor, filtroDepartamento, filtroEstatus, filtroCentroCosto]);
 
   const cargarSistemaInfo = async () => {
     try {
@@ -436,6 +450,7 @@ const Dashboard = () => {
         const s = val?.trim().toLowerCase();
         if (s === 'autorizado') color = 'purple';
         if (s === 'aprobado') color = 'green';
+        if (s === 'en trámite') color = 'geekblue';
         if (s === 'pagado') color = 'cyan';
         if (s === 'cerrado') color = 'gold';
         if (s === 'rechazado') color = 'red';
@@ -491,7 +506,17 @@ const Dashboard = () => {
                     </Tooltip>
                   )}
                   {r.estatus?.trim().toLowerCase() === 'pagado' && (
-                    <Tooltip title="Cerrar">
+                    <Space size="small">
+                      <Tooltip title="Marcar En Trámite (Espera de Factura)">
+                        <Button icon={<ClockCircleOutlined />} size="small" style={{ backgroundColor: '#2f54eb', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'En Trámite')} />
+                      </Tooltip>
+                      <Tooltip title="Cerrar Solicitud">
+                        <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
+                      </Tooltip>
+                    </Space>
+                  )}
+                  {r.estatus?.trim().toLowerCase() === 'en trámite' && (
+                    <Tooltip title="Cerrar Solicitud">
                       <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
                     </Tooltip>
                   )}
@@ -695,6 +720,7 @@ const Dashboard = () => {
                     <Select.Option value="Pendiente">PENDIENTE</Select.Option>
                     <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
                     <Select.Option value="Aprobado">APROBADO</Select.Option>
+                    <Select.Option value="En Trámite">EN TRÁMITE</Select.Option>
                     <Select.Option value="Pagado">PAGADO</Select.Option>
                     <Select.Option value="Cerrado">CERRADO</Select.Option>
                     <Select.Option value="Devuelto">DEVUELTO</Select.Option>
@@ -799,6 +825,7 @@ const Dashboard = () => {
                   <Select.Option value="Pendiente">PENDIENTE</Select.Option>
                   <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
                   <Select.Option value="Aprobado">APROBADO</Select.Option>
+                  <Select.Option value="En Trámite">EN TRÁMITE</Select.Option>
                   <Select.Option value="Pagado">PAGADO</Select.Option>
                   <Select.Option value="Cerrado">CERRADO</Select.Option>
                   <Select.Option value="Devuelto">DEVUELTO</Select.Option>
@@ -976,6 +1003,7 @@ const Dashboard = () => {
                 <Select.Option value="Pendiente">Pendiente</Select.Option>
                 <Select.Option value="Autorizado">Autorizado</Select.Option>
                 <Select.Option value="Aprobado">Aprobado</Select.Option>
+                <Select.Option value="En Trámite">En Trámite</Select.Option>
                 <Select.Option value="Pagado">Pagado</Select.Option>
                 <Select.Option value="Cerrado">Cerrado</Select.Option>
                 <Select.Option value="Devuelto">Devuelto</Select.Option>
