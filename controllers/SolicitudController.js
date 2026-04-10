@@ -2104,8 +2104,8 @@ class SolicitudController {
 
       // Solo el administrador puede ver las operaciones
       const data = {
-        version: info.version || '2.5',
-        operaciones: esAdmin ? (info.operaciones || '250') : null
+        version: info.version || '',
+        operaciones: esAdmin ? (info.operaciones || '0') : null
       };
 
       res.json(data);

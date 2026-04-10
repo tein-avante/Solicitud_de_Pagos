@@ -1,6 +1,13 @@
 # Historial de Cambios - Sistema de Solicitud de Pagos
 
+Este archivo mantiene el detalle de las modificaciones realizadas agrupadas por fecha.
+
 ## 2026-04-10
+
+- **Versión Directa desde Base de Datos:**
+  - Se eliminó la versión harcodeada ('2.9') del Frontend (`Dashboard.jsx`) para evitar el parpadeo visual al cargar.
+  - Se ajustó el `sistemaService.js` para usar la versión configurada en la BD como única fuente de verdad.
+  - Se limpiaron los valores de respaldo (fallbacks) en el Backend para evitar mostrar versiones obsoletas ('2.5', '2.7') en caso de error.
 
 - **Estado "En Trámite" para Solicitudes Pagadas (Espera de Factura):**
   - **Solicitud.js (Modelo):** Se añadió 'En Trámite' al ENUM de estatus para permitir el seguimiento de solicitudes pagadas que aún no tienen factura definitiva.

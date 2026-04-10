@@ -91,7 +91,7 @@ const Dashboard = () => {
   const [proveedoresLista, setProveedoresLista] = useState([]);
   const [deptsLista, setDeptsLista] = useState([]);
   const [centrosCostoLista, setCentrosCostoLista] = useState([]);
-  const [sistemaInfo, setSistemaInfo] = useState({ version: '2.9', operaciones: null });
+  const [sistemaInfo, setSistemaInfo] = useState({ version: '', operaciones: null });
 
 
   const [form] = Form.useForm();
@@ -260,7 +260,7 @@ const Dashboard = () => {
     try {
       // Validar campos antes de proceder (esto dispara los errores visuales)
       const values = await form.validateFields();
-      
+
       const formData = new FormData();
       formData.append('estatus', 'Pagado');
 
