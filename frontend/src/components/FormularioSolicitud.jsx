@@ -54,6 +54,7 @@ const { Text, Title, Paragraph } = Typography;
 
 const FormularioSolicitud = () => {
   const [form] = Form.useForm();
+  const [formPago] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [esEdicion, setEsEdicion] = useState(false);
   const [solicitud, setSolicitud] = useState(null);
@@ -61,6 +62,8 @@ const FormularioSolicitud = () => {
   const [proveedores, setProveedores] = useState([]);
   const [comentario, setComentario] = useState('');
   const [fileList, setFileList] = useState([]);
+  const [fileListPagar, setFileListPagar] = useState([]);
+  const [modalPagar, setModalPagar] = useState(false);
   const [distribucion, setDistribucion] = useState([]);
   const [montoActual, setMontoActual] = useState(0);
   const [monedaActual, setMonedaActual] = useState('USD');
@@ -74,6 +77,7 @@ const FormularioSolicitud = () => {
 
   // Cargamos datos del usuario para el autocompletado del encabezado
   const usuario = JSON.parse(localStorage.getItem('usuario'));
+  const esAdminOAuditor = ['administrador', 'auditor'].includes(usuario?.rol?.toLowerCase());
 
   useEffect(() => {
     fetchAuxiliares();
@@ -165,7 +169,8 @@ const FormularioSolicitud = () => {
   };
 
   const handleCambioProveedor = (id) => {
-    const prov = proveedores.find(p => p.id === id);
+    // Buscamos en la lista global O en el proveedor que ya tiene la solicitud (por si es histórico)
+    const prov = proveedores.find(p => p.id === id) || (solicitud?.proveedor?.id === id ? solicitud.proveedor : null);
     if (prov) {
       form.setFieldsValue({
         datosBancarios: {
@@ -187,7 +192,9 @@ const FormularioSolicitud = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      const provCompleto = proveedores.find(p => p.id === values.proveedorId);
+      // Buscamos los datos completos del proveedor (en la lista global o en lo que ya tenía la solicitud)
+      const provCompleto = proveedores.find(p => p.id === values.proveedorId) || 
+                           (solicitud?.proveedor?.id === values.proveedorId ? solicitud.proveedor : null);
 
       const formData = new FormData();
 
@@ -208,10 +215,23 @@ const FormularioSolicitud = () => {
         }
       });
 
-      // Agregar distribución de centros de costo (Vital para persistencia)
-      if (distribucion && distribucion.length > 0) {
-        formData.append('distribucionCentros', JSON.stringify(distribucion));
+      // Validar distribución de centros de costo (Obligatorio y exacto)
+      if (!distribucion || distribucion.length === 0 || distribucion.some(d => !d.centroCostoId)) {
+        setLoading(false);
+        return message.error('Debe seleccionar un Centro de Costo para cada línea de distribución');
       }
+
+      // Validar que la suma coincida con el total
+      const sumaDistribucion = distribucion.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0);
+      const montoTotalForm = parseFloat(values.montoTotal) || 0;
+
+      if (Math.abs(sumaDistribucion - montoTotalForm) > 0.01) {
+        setLoading(false);
+        return message.error(`La suma de la distribución (${sumaDistribucion.toFixed(2)}) no coincide con el monto total (${montoTotalForm.toFixed(2)})`);
+      }
+
+      // Agregar distribución de centros de costo (Vital para persistencia)
+      formData.append('distribucionCentros', JSON.stringify(distribucion));
 
       // Agregar archivos nuevos si los hay
       fileList.forEach(file => {
@@ -303,19 +323,69 @@ const FormularioSolicitud = () => {
     } catch (e) { message.error('Error al generar PDF'); }
   };
 
+  /**
+   * ACCIÓN: Confirmar y procesar el pago (desde el modal)
+   */
+  const confirmarPagar = async () => {
+    try {
+      const values = await formPago.validateFields();
+      setLoading(true);
+
+      const formData = new FormData();
+      formData.append('estatus', 'Pagado');
+      formData.append('tasaBCV', values.tasaBCV);
+      
+      if (values.comentarioAccion) {
+        formData.append('comentario', values.comentarioAccion);
+      }
+
+      if (fileListPagar.length > 0) {
+        formData.append('comprobante', fileListPagar[0].originFileObj);
+      }
+
+      await api.put(`/solicitudes/${id}/estatus`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      message.success('Pago procesado correctamente');
+      setModalPagar(false);
+      formPago.resetFields();
+      setFileListPagar([]);
+      cargarDetalleSolicitud(id);
+    } catch (e) {
+      console.error('[CONFIRMAR_PAGAR ERROR]', e);
+      message.error(e.response?.data?.error || 'Error al procesar el pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // BOTONES DE ACCIÓN RÁPIDA (Solo para Admin en modo lectura)
   const handleAccion = async (nuevoEstatus) => {
-    if (nuevoEstatus === 'Devuelto' || nuevoEstatus === 'Rechazado') {
+    if (nuevoEstatus === 'Pagado') {
+      setModalPagar(true);
+      // Pre-cargar tasa si ya existe
+      if (solicitud?.tasaBCV) {
+        formPago.setFieldsValue({ tasaBCV: Number(solicitud.tasaBCV) });
+      }
+      return;
+    }
+
+    if (nuevoEstatus === 'Devuelto' || nuevoEstatus === 'Rechazado' || nuevoEstatus === 'Devolución en compras') {
+      const isDevCompra = nuevoEstatus === 'Devolución en compras';
       const refMotivo = { valor: '' };
       Modal.confirm({
-        title: `Motivo de ${nuevoEstatus === 'Devuelto' ? 'Devolución' : 'Rechazo'}`,
+        title: isDevCompra ? 'Registrar Devolución en Compras' : `Motivo de ${nuevoEstatus === 'Devuelto' ? 'Devolución' : 'Rechazo'}`,
         content: (
-          <Input.TextArea
-            placeholder="Escriba aquí el motivo detallado..."
-            onChange={(e) => { refMotivo.valor = e.target.value; }}
-            rows={4}
-            style={{ marginTop: 10 }}
-          />
+          <div style={{ marginTop: 10 }}>
+            {isDevCompra && <Paragraph type="secondary">Indique el motivo de la devolución del dinero por parte del proveedor:</Paragraph>}
+            <Input.TextArea
+              placeholder={isDevCompra ? "Ej: El proveedor no dispone del material..." : "Escriba aquí el motivo detallado..."}
+              onChange={(e) => { refMotivo.valor = e.target.value; }}
+              rows={4}
+              style={{ marginTop: 10 }}
+            />
+          </div>
         ),
         onOk: async () => {
           if (!refMotivo.valor.trim()) {
@@ -360,10 +430,11 @@ const FormularioSolicitud = () => {
                 (solicitud?.estatus === 'En Trámite' ? 'geekblue' :
                   (solicitud?.estatus === 'Pagado' ? 'cyan' :
                     (solicitud?.estatus === 'Cerrado' ? 'gold' :
-                      (solicitud?.estatus === 'Devuelto' ? 'orange' :
-                        (solicitud?.estatus === 'Anulado' ? 'default' : 'blue'))))))
+                      (solicitud?.estatus === 'Devolución en compras' ? 'volcano' :
+                        (solicitud?.estatus === 'Devuelto' ? 'orange' :
+                          (solicitud?.estatus === 'Anulado' ? 'default' : 'blue')))))))
           } style={{ fontSize: 14, padding: '4px 10px' }}>
-            {solicitud?.estatus || 'NUEVA'}
+            <span>{solicitud?.estatus || 'NUEVA'}</span>
           </Tag>
         </Space>
       </div>
@@ -439,16 +510,28 @@ const FormularioSolicitud = () => {
               <Row gutter={16}>
                 <Col xs={24} md={24}>
                   <Form.Item label="Proveedor" name="proveedorId" rules={[{ required: true }]}>
-                    <Select showSearch optionFilterProp="children" onChange={handleCambioProveedor}>
+                    <Select 
+                      showSearch 
+                      placeholder="Busque por nombre o RIF..."
+                      optionFilterProp="children" 
+                      onChange={handleCambioProveedor}
+                      filterOption={(input, option) => {
+                        // Accedemos al texto de la opción de forma segura para comparar
+                        const content = option?.children || '';
+                        return content.toString().toLowerCase().includes(input.toLowerCase());
+                      }}
+                    >
                       {(() => {
                         const opts = [...(Array.isArray(proveedores) ? proveedores : [])];
                         // Si la solicitud tiene un proveedor guardado y este no está en la lista de activos, lo agregamos para visualización
                         if (solicitud?.proveedor?.id && !opts.find(p => p.id === solicitud.proveedor.id)) {
                           opts.push(solicitud.proveedor);
                         }
-                        return opts.map(p => (
-                          <Select.Option key={p.id} value={p.id}>{p.razonSocial} ({p.rif})</Select.Option>
-                        ));
+                          return opts.map(p => (
+                            <Select.Option key={p.id} value={p.id}>
+                              {`${p.razonSocial} (${p.rif})`}
+                            </Select.Option>
+                          ));
                       })()}
                     </Select>
                   </Form.Item>
@@ -493,12 +576,12 @@ const FormularioSolicitud = () => {
                       <Row gutter={16}>
                         <Col span={12}>
                           <Form.Item label="Banco" name={['datosBancarios', 'banco']} rules={[{ required: true }]}>
-                            <Input placeholder="Ej: Mercantil" />
+                            <Input placeholder="Ej: Mercantil" disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                         <Col span={12}>
                           <Form.Item label="Número de Cuenta" name={['datosBancarios', 'cuenta']} rules={[{ required: true }]}>
-                            <Input placeholder="0105..." />
+                            <Input placeholder="0105..." disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -509,17 +592,17 @@ const FormularioSolicitud = () => {
                       <Row gutter={16}>
                         <Col span={8}>
                           <Form.Item label="Banco" name={['datosBancarios', 'bancoPago']} rules={[{ required: true }]}>
-                            <Input placeholder="Ej: Mercantil" />
+                            <Input placeholder="Ej: Mercantil" disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                         <Col span={8}>
                           <Form.Item label="Teléfono" name={['datosBancarios', 'telefonoPago']} rules={[{ required: true }]}>
-                            <Input placeholder="0412..." />
+                            <Input placeholder="0412..." disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                         <Col span={8}>
                           <Form.Item label="RIF/Cédula" name={['datosBancarios', 'rifPago']} rules={[{ required: true }]}>
-                            <Input placeholder="V..." />
+                            <Input placeholder="V..." disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -529,8 +612,8 @@ const FormularioSolicitud = () => {
                     return (
                       <Row gutter={16}>
                         <Col span={24}>
-                          <Form.Item label="Correo e-pay" name={['datosBancarios', 'emailPago']} rules={[{ required: true, type: 'email' }]}>
-                            <Input placeholder="pago@e-pay.com" />
+                          <Form.Item label="Correo e-pay" name={['datosBancarios', 'emailPago']} rules={[{ required: true }]}>
+                            <Input placeholder="pago@e-pay.com" disabled={!esAdminOAuditor} />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -555,9 +638,9 @@ const FormularioSolicitud = () => {
                     }}>
                       <DollarOutlined style={{ fontSize: 20, color: '#52c41a' }} />
                       <div>
-                        <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>TASA BCV AL MOMENTO DEL PAGO</Text>
+                        <Text type="secondary" style={{ fontSize: 11, display: 'block' }}><span>TASA BCV AL MOMENTO DEL PAGO</span></Text>
                         <Text strong style={{ fontSize: 18, color: '#237804' }}>
-                          Bs. {Number(solicitud.tasaBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                          <span>Bs. {Number(solicitud.tasaBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>
                         </Text>
                       </div>
                     </div>
@@ -614,7 +697,7 @@ const FormularioSolicitud = () => {
                       )}
                     */}
                     <Button type="primary" htmlType="submit" size="large" icon={<SaveOutlined />} loading={loading}>
-                      {esEdicion ? 'Guardar Cambios' : 'Registrar Solicitud'}
+                      <span>{esEdicion ? 'Guardar Cambios' : 'Registrar Solicitud'}</span>
                     </Button>
                   </Space>
                 </div>
@@ -640,18 +723,18 @@ const FormularioSolicitud = () => {
                     />
                     <div style={{ marginTop: 10 }}>
                       <Space>
-                        <Upload
-                          beforeUpload={() => false}
-                          multiple={!esEdicion}
-                          fileList={fileList}
-                          onChange={({ fileList }) => setFileList(fileList)}
-                          accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        >
-                          <Button icon={<UploadOutlined />}>Seleccionar Archivo{!esEdicion && 's'}</Button>
-                        </Upload>
-                        {esEdicion && fileList.length > 0 && (
-                          <Button type="primary" icon={<UploadOutlined />} onClick={handleSubirSoporteAdicional}>Subir Ahora</Button>
-                        )}
+                          <Upload
+                            beforeUpload={() => false}
+                            multiple={!esEdicion}
+                            fileList={fileList}
+                            onChange={({ fileList }) => setFileList(fileList)}
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          >
+                            <Button icon={<UploadOutlined />}><span>Seleccionar Archivo{!esEdicion && 's'}</span></Button>
+                          </Upload>
+                          {esEdicion && fileList.length > 0 && (
+                            <Button type="primary" icon={<UploadOutlined />} onClick={handleSubirSoporteAdicional}><span>Subir Ahora</span></Button>
+                          )}
                       </Space>
                     </div>
                   </>
@@ -766,14 +849,20 @@ const FormularioSolicitud = () => {
                   {solicitud?.estatus === 'Aprobado' && usuario?.rol === 'Administrador' && (
                     <Button type="primary" icon={<DollarOutlined />} onClick={() => handleAccion('Pagado')}>Marcar como Pagada</Button>
                   )}
-                  {solicitud?.estatus === 'Pagado' && usuario?.rol === 'Administrador' && (
+                  {(solicitud?.estatus === 'Pagado' || solicitud?.estatus === 'En Trámite') && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
                     <>
-                      <Button icon={<ClockCircleOutlined />} onClick={() => handleAccion('En Trámite')} style={{ backgroundColor: '#2f54eb', color: 'white' }}>Marcar En Trámite</Button>
+                      {solicitud?.estatus === 'Pagado' && (
+                        <Button icon={<ClockCircleOutlined />} onClick={() => handleAccion('En Trámite')} style={{ backgroundColor: '#2f54eb', color: 'white' }}>Marcar En Trámite</Button>
+                      )}
                       <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Cerrado')} style={{ backgroundColor: '#faad14' }}>Cerrar Solicitud</Button>
+                      <Button icon={<UndoOutlined />} onClick={() => handleAccion('Devolución en compras')} style={{ backgroundColor: '#fa8c16', color: 'white' }}>Devolución en compras</Button>
                     </>
                   )}
-                  {solicitud?.estatus === 'En Trámite' && usuario?.rol === 'Administrador' && (
-                    <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Cerrado')} style={{ backgroundColor: '#faad14' }}>Cerrar Solicitud</Button>
+                  {solicitud?.estatus === 'Devolución en compras' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
+                    <Space>
+                      <Button icon={<ClockCircleOutlined />} onClick={() => handleAccion('En Trámite')} style={{ backgroundColor: '#2f54eb', color: 'white' }}>Marcar En Trámite</Button>
+                      <Button type="primary" icon={<CheckOutlined />} onClick={() => handleAccion('Cerrado')} style={{ backgroundColor: '#faad14' }}>Cerrar Solicitud</Button>
+                    </Space>
                   )}
                 </Space>
               </div>
@@ -831,6 +920,61 @@ const FormularioSolicitud = () => {
           </Col>
         )}
       </Row>
+
+      {/* MODAL: Procesar Pago (Mismo diseño que en Dashboard) */}
+      <Modal
+        title="Procesar Pago"
+        visible={modalPagar}
+        onOk={confirmarPagar}
+        onCancel={() => { setModalPagar(false); formPago.resetFields(); }}
+        okText="Registrar Pago"
+        cancelText="Cancelar"
+        confirmLoading={loading}
+        destroyOnClose
+      >
+        <Paragraph>
+          Adjunte el comprobante de pago e indique la tasa BCV para la solicitud <strong>{solicitud?.correlativo}</strong>
+        </Paragraph>
+
+        <Form form={formPago} layout="vertical">
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item 
+                name="tasaBCV" 
+                label="Tasa de Cambio BCV del día" 
+                rules={[{ required: true, message: 'Indique la tasa BCV' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Ej: 36.45"
+                  step={0.01}
+                  min={0.01}
+                  precision={4}
+                  autoFocus
+                />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="comentarioAccion" label="Comentario adicional (Opcional)">
+                <Input.TextArea placeholder="Ej: Pago realizado via transferencia Banesco..." rows={2} />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item label="Comprobante de Pago">
+                <Upload
+                  beforeUpload={() => false}
+                  fileList={fileListPagar}
+                  onChange={({ fileList }) => setFileListPagar(fileList)}
+                  maxCount={1}
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                >
+                  <Button icon={<UploadOutlined />}>Seleccionar Archivo</Button>
+                </Upload>
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </div>
   );
 };

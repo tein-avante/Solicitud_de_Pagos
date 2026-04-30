@@ -65,6 +65,14 @@ const Dashboard = () => {
 
   // ESTADOS PARA MANEJO DE DATOS Y UI (Persistidos en localStorage)
   const savedFilters = JSON.parse(localStorage.getItem('dashboard_filtros') || '{}');
+
+  // Validar que los valores de paginación del localStorage sean números enteros positivos.
+  // Si están corruptos (ej: un string como "M/N ANGEL FALLS"), se usan los valores por defecto.
+  const safePage = Number.isInteger(Number(savedFilters.currentPage)) && Number(savedFilters.currentPage) > 0
+    ? Number(savedFilters.currentPage) : 1;
+  const safeSize = Number.isInteger(Number(savedFilters.pageSize)) && Number(savedFilters.pageSize) > 0
+    ? Number(savedFilters.pageSize) : 10;
+
   const [loading, setLoading] = useState(false);
   const [solicitudes, setSolicitudes] = useState([]);
   const [estadisticas, setEstadisticas] = useState({});
@@ -75,15 +83,15 @@ const Dashboard = () => {
   const [modalEstadisticas, setModalEstadisticas] = useState(false);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
   const [fileListPagar, setFileListPagar] = useState([]);
-  const [currentPage, setCurrentPage] = useState(savedFilters.currentPage || 1);
-  const [pageSize, setPageSize] = useState(savedFilters.pageSize || 10);
+  const [currentPage, setCurrentPage] = useState(safePage);
+  const [pageSize, setPageSize] = useState(safeSize);
   const [totalItems, setTotalItems] = useState(0);
 
   // Estados para Reportes con Filtro de Fecha
   const [modalReporte, setModalReporte] = useState(false);
   const [tipoReporteActual, setTipoReporteActual] = useState(null); // 'relacion' | 'xlsx' | 'pdf'
   const [rangoFechas, setRangoFechas] = useState([null, null]);
-  const [estatusReporte, setEstatusReporte] = useState(['Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
+  const [estatusReporte, setEstatusReporte] = useState(['Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado', 'Devolución en compras']);
   const [filtroProveedor, setFiltroProveedor] = useState(savedFilters.filtroProveedor || null);
   const [filtroDepartamento, setFiltroDepartamento] = useState(savedFilters.filtroDepartamento || null);
   const [filtroEstatus, setFiltroEstatus] = useState(savedFilters.filtroEstatus || '');
@@ -92,6 +100,7 @@ const Dashboard = () => {
   const [deptsLista, setDeptsLista] = useState([]);
   const [centrosCostoLista, setCentrosCostoLista] = useState([]);
   const [sistemaInfo, setSistemaInfo] = useState({ version: '', operaciones: null });
+  const [puedeVerFinanzas, setPuedeVerFinanzas] = useState(false);
 
 
   const [form] = Form.useForm();
@@ -106,6 +115,7 @@ const Dashboard = () => {
     cargarEstadisticas();
     cargarAuxiliares();
     cargarSistemaInfo();
+    cargarAccesoFinanzas();
   }, []);
 
   // Efecto para persistir filtros en localStorage cada vez que cambien
@@ -129,6 +139,20 @@ const Dashboard = () => {
     }
   };
 
+  const cargarAccesoFinanzas = async () => {
+    try {
+      if (usuario?.rol?.toLowerCase() === 'administrador') {
+        setPuedeVerFinanzas(true);
+        return;
+      }
+
+      const res = await api.get('/caja-chica');
+      setPuedeVerFinanzas(Array.isArray(res.data) && res.data.length > 0);
+    } catch (e) {
+      setPuedeVerFinanzas(false);
+    }
+  };
+
 
   const cargarAuxiliares = async () => {
     try {
@@ -147,19 +171,16 @@ const Dashboard = () => {
   const cargarSolicitudes = async (page = 1, limit = pageSize, extraFilters = {}) => {
     setLoading(true);
     try {
-      // Usar el operador 'in' para saber si el filtro fue pasado en la llamada (aunque sea undefined/null)
-      const estatusFilter = ('estatus' in extraFilters) ? extraFilters.estatus : filtroEstatus;
-      const provFilter = ('proveedorId' in extraFilters) ? extraFilters.proveedorId : filtroProveedor;
-      const deptFilter = ('unidadSolicitante' in extraFilters) ? extraFilters.unidadSolicitante : filtroDepartamento;
-      const centroFilter = ('centroCostoId' in extraFilters) ? extraFilters.centroCostoId : filtroCentroCosto;
+      const params = {
+        pagina: page,
+        limite: limit,
+        estatus: ('estatus' in extraFilters) ? extraFilters.estatus : filtroEstatus,
+        proveedorId: ('proveedorId' in extraFilters) ? extraFilters.proveedorId : filtroProveedor,
+        unidadSolicitante: ('unidadSolicitante' in extraFilters) ? extraFilters.unidadSolicitante : filtroDepartamento,
+        centroCostoId: ('centroCostoId' in extraFilters) ? extraFilters.centroCostoId : filtroCentroCosto
+      };
 
-      let url = `/solicitudes?pagina=${page}&limite=${limit}`;
-      if (estatusFilter) url += `&estatus=${estatusFilter}`;
-      if (provFilter) url += `&proveedorId=${provFilter}`;
-      if (deptFilter) url += `&unidadSolicitante=${deptFilter}`;
-      if (centroFilter) url += `&centroCostoId=${centroFilter}`;
-
-      const response = await api.get(url);
+      const response = await api.get('/solicitudes', { params });
       setSolicitudes(response.data.solicitudes);
       setTotalItems(response.data.total);
       setCurrentPage(page);
@@ -195,6 +216,45 @@ const Dashboard = () => {
   const handleRechazar = (solicitud) => { setSolicitudSeleccionada(solicitud); setModalRechazar(true); };
   const handleDevolver = (solicitud) => { setSolicitudSeleccionada(solicitud); setModalDevolver(true); };
   const handleAbrirPagar = (solicitud) => { setSolicitudSeleccionada(solicitud); setFileListPagar([]); setModalPagar(true); };
+  const handleDevolverCompra = (solicitud) => {
+    setSolicitudSeleccionada(solicitud);
+    const refMotivo = { valor: '' };
+    confirm({
+      title: 'Registrar Devolución en Compras',
+      icon: <UndoOutlined />,
+      content: (
+        <div style={{ marginTop: 15 }}>
+          <Text type="secondary">Indique el motivo de la devolución del dinero por parte del proveedor:</Text>
+          <Input.TextArea
+            placeholder="Ej: El proveedor no dispone del material y devolverá el pago..."
+            rows={4}
+            style={{ marginTop: 10 }}
+            onChange={(e) => { refMotivo.valor = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: 'Confirmar Devolución',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        if (!refMotivo.valor.trim()) {
+          message.error('Debe ingresar un motivo para la devolución');
+          return Promise.reject();
+        }
+        try {
+          await api.patch(`/solicitudes/${solicitud.id}/estatus`, {
+            estatus: 'Devolución en compras',
+            motivo: refMotivo.valor,
+            comentario: refMotivo.valor
+          });
+          message.success('Devolución registrada correctamente');
+          cargarSolicitudes();
+          cargarEstadisticas();
+        } catch (e) {
+          message.error('Error al registrar devolución');
+        }
+      }
+    });
+  };
 
   /**
    * ACCIÓN: Aprobar Solicitud
@@ -336,7 +396,7 @@ const Dashboard = () => {
   const handleReporteRelacion = () => {
     setTipoReporteActual('relacion');
     // Pre-seleccionar todos por defecto
-    setEstatusReporte(['Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado']);
+    setEstatusReporte(['Pendiente', 'Autorizado', 'Aprobado', 'Pagado', 'Cerrado', 'Devuelto', 'Rechazado', 'Anulado', 'Devolución en compras']);
     setModalReporte(true);
   };
 
@@ -444,7 +504,8 @@ const Dashboard = () => {
     {
       title: 'Estatus',
       dataIndex: 'estatus',
-      width: 110,
+      key: 'estatus',
+      width: 140,
       render: (val) => {
         let color = 'blue';
         const s = val?.trim().toLowerCase();
@@ -456,6 +517,10 @@ const Dashboard = () => {
         if (s === 'rechazado') color = 'red';
         if (s === 'devuelto') color = 'orange';
         if (s === 'anulado') color = 'default';
+        if (s === 'devolución en compras') {
+          color = 'volcano';
+          val = 'DEVOLUCIÓN';
+        }
         return <Tag color={color}>{val?.toUpperCase() || ''}</Tag>;
       }
 
@@ -493,32 +558,50 @@ const Dashboard = () => {
 
 
               {/* ACCIONES DEL ADMINISTRADOR */}
-              {usuario?.rol?.toLowerCase() === 'administrador' && (
+              {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'auditor') && (
                 <>
                   {r.estatus?.trim().toLowerCase() === 'autorizado' && (
                     <Tooltip title="Aprobar">
                       <Button icon={<CheckOutlined />} size="small" type="primary" onClick={() => handleAprobar(r)} />
                     </Tooltip>
                   )}
-                  {r.estatus?.trim().toLowerCase() === 'aprobado' && (
-                    <Tooltip title="Pagar">
+                  {r.estatus?.trim().toLowerCase() === 'aprobado' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
+                    <Tooltip title="Marcar como Pagada">
                       <Button icon={<DollarOutlined />} size="small" style={{ backgroundColor: '#52c41a', color: 'white' }} onClick={() => handleAbrirPagar(r)} />
                     </Tooltip>
                   )}
-                  {r.estatus?.trim().toLowerCase() === 'pagado' && (
+                  {r.estatus?.trim().toLowerCase() === 'pagado' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
                     <Space size="small">
                       <Tooltip title="Marcar En Trámite (Espera de Factura)">
                         <Button icon={<ClockCircleOutlined />} size="small" style={{ backgroundColor: '#2f54eb', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'En Trámite')} />
+                      </Tooltip>
+                      <Tooltip title="Devolución en compras">
+                        <Button icon={<UndoOutlined />} size="small" style={{ backgroundColor: '#fa8c16', color: 'white' }} onClick={() => handleDevolverCompra(r)} />
                       </Tooltip>
                       <Tooltip title="Cerrar Solicitud">
                         <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
                       </Tooltip>
                     </Space>
                   )}
-                  {r.estatus?.trim().toLowerCase() === 'en trámite' && (
-                    <Tooltip title="Cerrar Solicitud">
-                      <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
-                    </Tooltip>
+                  {r.estatus?.trim().toLowerCase() === 'en trámite' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
+                    <Space size="small">
+                      <Tooltip title="Cerrar Solicitud">
+                        <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
+                      </Tooltip>
+                      <Tooltip title="Devolución en compras (Reversar)">
+                        <Button icon={<UndoOutlined />} size="small" style={{ backgroundColor: '#fa8c16', color: 'white' }} onClick={() => handleDevolverCompra(r)} />
+                      </Tooltip>
+                    </Space>
+                  )}
+                  {r.estatus?.trim().toLowerCase() === 'devolución en compras' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
+                    <Space size="small">
+                      <Tooltip title="Marcar En Trámite">
+                        <Button icon={<ClockCircleOutlined />} size="small" style={{ backgroundColor: '#2f54eb', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'En Trámite')} />
+                      </Tooltip>
+                      <Tooltip title="Cerrar Solicitud">
+                        <Button icon={<CheckOutlined />} size="small" style={{ backgroundColor: '#faad14', color: 'white' }} onClick={() => handleAccionDirecta(r.id, 'Cerrado')} />
+                      </Tooltip>
+                    </Space>
                   )}
 
                 </>
@@ -605,16 +688,18 @@ const Dashboard = () => {
             <Tooltip title="Cambiar Tema">
               <Button shape="circle" size="small" icon={isDarkMode ? <BulbFilled /> : <BulbOutlined />} onClick={toggleTheme} />
             </Tooltip>
-            {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
-              <Space size="small">
+            <Space size="small">
+              {puedeVerFinanzas && (
                 <Tooltip title="Módulo de Finanzas (Caja Chica / Pagos Directos)">
                   <Button shape="circle" size="small" style={{ backgroundColor: '#ffdf00', color: '#1890ff', borderColor: '#ffdf00' }} icon={<DollarOutlined />} onClick={() => navigate('/finanzas')} />
                 </Tooltip>
+              )}
+              {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'gestor' || usuario?.rol?.toLowerCase() === 'auditor') && (
                 <Tooltip title="Gestión de Maestros">
                   <Button shape="circle" size="small" icon={<SettingOutlined />} onClick={() => navigate('/maestros')} />
                 </Tooltip>
-              </Space>
-            )}
+              )}
+            </Space>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Button type="primary" danger size="small" icon={<LogoutOutlined />} onClick={handleLogout}>Salir</Button>
               <Text type="secondary" style={{ fontSize: '10px', marginTop: 2 }}>v{sistemaInfo.version}</Text>
@@ -703,7 +788,7 @@ const Dashboard = () => {
                       cargarSolicitudes(1, pageSize, { centroCostoId: val });
                     }}
                   >
-                    {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.nombre}>{c.nombre}</Select.Option>)}
+                    {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.id}>{c.nombre}</Select.Option>)}
                   </Select>
 
                   <Select
@@ -726,6 +811,7 @@ const Dashboard = () => {
                     <Select.Option value="Devuelto">DEVUELTO</Select.Option>
                     <Select.Option value="Rechazado">RECHAZADO</Select.Option>
                     <Select.Option value="Anulado">ANULADO</Select.Option>
+                    <Select.Option value="Devolución en compras">DEVOLUCIÓN</Select.Option>
                   </Select>
                 </div>
               }
@@ -808,7 +894,7 @@ const Dashboard = () => {
                     cargarSolicitudes(1, pageSize, { centroCostoId: val });
                   }}
                 >
-                  {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.nombre}>{c.nombre}</Select.Option>)}
+                  {centrosCostoLista.map(c => <Select.Option key={c.id} value={c.id}>{c.nombre}</Select.Option>)}
                 </Select>
 
                 <Select

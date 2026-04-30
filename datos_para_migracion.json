@@ -1,0 +1,906 @@
+[
+  {
+    "correlativo": "ABS-AV-059-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-058-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-057-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-056-26",
+    "centroCostoNombre": "CADETES"
+  },
+  {
+    "correlativo": "ABS-AV-055-26",
+    "centroCostoNombre": "COMANDO ANTIDROGAS"
+  },
+  {
+    "correlativo": "ABS-AV-054-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-053-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-052-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-AV-051-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-050-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-049-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-048-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GT-007-26",
+    "centroCostoNombre": "LM NAVIERA VII"
+  },
+  {
+    "correlativo": "ABS-AV-047-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-GC-036-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GC-035-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GA-002-26",
+    "centroCostoNombre": "GERENCIA DE AMBIENTE"
+  },
+  {
+    "correlativo": "ABS-GP-048-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-047-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GP-046-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-045-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-044-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GP-043-26",
+    "centroCostoNombre": "R/M LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-042-26",
+    "centroCostoNombre": "R/M LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GF-050-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GF-049-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GF-048-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-AV-046-26",
+    "centroCostoNombre": "DEPARTAMENTO DE CUBIERTA"
+  },
+  {
+    "correlativo": "ABS-AV-045-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-044-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-043-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-042-26",
+    "centroCostoNombre": "DRAGA XIN HAI MA"
+  },
+  {
+    "correlativo": "ABS-AV-041-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-040-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-039-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-SS-015-26",
+    "centroCostoNombre": "GERENCIA DE LOGÍSTICA Y TRANSPORTE"
+  },
+  {
+    "correlativo": "ABS-SS-014-26",
+    "centroCostoNombre": "GERENCIA DE SEGURIDAD Y SALUD LABORAL"
+  },
+  {
+    "correlativo": "ABS-SS-013-26",
+    "centroCostoNombre": "R/M LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AF-009-26",
+    "centroCostoNombre": "MN Wen Li"
+  },
+  {
+    "correlativo": "ABS-AF-008-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-SG-001-26",
+    "centroCostoNombre": "GERENCIA DE SISTEMA DE GESTIÓN"
+  },
+  {
+    "correlativo": "ABS-GA-001-26",
+    "centroCostoNombre": "GERENCIA DE AMBIENTE"
+  },
+  {
+    "correlativo": "ABS-GC-034-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GC-033-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-032-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GP-041-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-AV-038-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-037-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-036-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AV-035-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-034-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-AV-033-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-AV-032-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AV-031-26",
+    "centroCostoNombre": "DRAGA XIN HAI MA"
+  },
+  {
+    "correlativo": "ABS-GP-040-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-039-26",
+    "centroCostoNombre": "GERENCIA DE CONTRATACIONES"
+  },
+  {
+    "correlativo": "ABS-GT-006-26",
+    "centroCostoNombre": "DRAGA MARIO OLIVA PEREZ"
+  },
+  {
+    "correlativo": "ABS-AV-030-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-GF-047-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AV-029-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-028-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-027-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-026-26",
+    "centroCostoNombre": "DRAGA XIN HAI MA"
+  },
+  {
+    "correlativo": "ABS-AV-025-26",
+    "centroCostoNombre": "DRAGA XIN HAI MA"
+  },
+  {
+    "correlativo": "ABS-GP-038-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-046-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GP-037-26",
+    "centroCostoNombre": "GLOBAL ENVIROMENT SERVICES, C.A"
+  },
+  {
+    "correlativo": "ABS-GP-036-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-035-26",
+    "centroCostoNombre": "GLOBAL ENVIROMENT SERVICES, C.A"
+  },
+  {
+    "correlativo": "ABS-TI-001-26",
+    "centroCostoNombre": "SOCIO ALVANY"
+  },
+  {
+    "correlativo": "ABS-GF-045-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GP-034-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-033-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-032-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-031-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-030-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-044-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-043-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-042-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-041-26",
+    "centroCostoNombre": "LM NAVIERA VII"
+  },
+  {
+    "correlativo": "ABS-GF-040-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-039-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-038-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-RP-007-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-RP-006-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-GF-037-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-029-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GF-036-26",
+    "centroCostoNombre": "LM NAVIERA VII"
+  },
+  {
+    "correlativo": "ABS-GT-005-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-SS-012-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-035-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-028-26",
+    "centroCostoNombre": "SOCIO NOMAR"
+  },
+  {
+    "correlativo": "ABS-SS-011-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-SS-010-26",
+    "centroCostoNombre": "GERENCIA DE SEGURIDAD Y SALUD LABORAL"
+  },
+  {
+    "correlativo": "ABS-AF-007-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-GP-027-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AF-006-26",
+    "centroCostoNombre": "SOCIO NOMAR"
+  },
+  {
+    "correlativo": "ABS-GP-026-26",
+    "centroCostoNombre": "GERENCIA DE CONSOLIDACIÓN DE CARGA"
+  },
+  {
+    "correlativo": "ABS-AF-005-26",
+    "centroCostoNombre": "SOCIO ANDRES"
+  },
+  {
+    "correlativo": "ABS-AF-004-26",
+    "centroCostoNombre": "SOCIO ALVANY"
+  },
+  {
+    "correlativo": "ABS-AF-003-26",
+    "centroCostoNombre": "SOCIO ALMA"
+  },
+  {
+    "correlativo": "ABS-GP-025-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-AF-002-26",
+    "centroCostoNombre": "DRAGA HANG JUN 4011"
+  },
+  {
+    "correlativo": "ABS-AF-001-26",
+    "centroCostoNombre": "GERENCIA DE ADMINISTRACIÓN Y FINANZAS"
+  },
+  {
+    "correlativo": "ABS-AV-024-26",
+    "centroCostoNombre": "COMANDO ANTIDROGAS"
+  },
+  {
+    "correlativo": "ABS-AV-023-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AV-022-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GF-033-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GF-032-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GF-031-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GF-030-26",
+    "centroCostoNombre": "LM NAVIERA VI"
+  },
+  {
+    "correlativo": "ABS-GF-029-26",
+    "centroCostoNombre": "LM NAVIERA IV"
+  },
+  {
+    "correlativo": "ABS-GF-028-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GF-027-26",
+    "centroCostoNombre": "LM NAVIERA II"
+  },
+  {
+    "correlativo": "ABS-GF-026-26",
+    "centroCostoNombre": "LM NAVIERA I"
+  },
+  {
+    "correlativo": "ABS-GF-025-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GF-024-26",
+    "centroCostoNombre": "LM NAVIERA VI"
+  },
+  {
+    "correlativo": "ABS-GF-023-26",
+    "centroCostoNombre": "LM NAVIERA IV"
+  },
+  {
+    "correlativo": "ABS-GF-022-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-SS-009-26",
+    "centroCostoNombre": "MN MACAREO"
+  },
+  {
+    "correlativo": "ABS-SS-008-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-GP-024-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-023-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-022-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-031-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AV-021-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AV-020-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-019-26",
+    "centroCostoNombre": "COMANDO ANTIDROGAS"
+  },
+  {
+    "correlativo": "ABS-AV-018-26",
+    "centroCostoNombre": "CADETES"
+  },
+  {
+    "correlativo": "ABS-AV-017-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AV-016-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AV-015-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-014-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-013-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-AV-012-26",
+    "centroCostoNombre": "MN NOINA"
+  },
+  {
+    "correlativo": "ABS-AV-011-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-AV-010-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AV-009-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-AV-008-26",
+    "centroCostoNombre": "RM PILOT"
+  },
+  {
+    "correlativo": "ABS-AV-007-26",
+    "centroCostoNombre": "GERENCIA DE APROVISIONAMIENTO Y AVITUALLAMIENTO"
+  },
+  {
+    "correlativo": "ABS-AV-006-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-AV-005-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-AV-004-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-AV-003-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-AV-002-26",
+    "centroCostoNombre": "DRAGA XIN HAI MA"
+  },
+  {
+    "correlativo": "ABS-GC-030-26",
+    "centroCostoNombre": " AVANTE BUREAU SHIPPING CORPORACION, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-029-26",
+    "centroCostoNombre": "GLOBAL ENVIROMENT SERVICES, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-028-26",
+    "centroCostoNombre": "H&V LINEA NAVIERA, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-027-26",
+    "centroCostoNombre": "A&N GLOBAL CONSULTING, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-026-26",
+    "centroCostoNombre": " AVANTE BUREAU SHIPPING CORPORACION, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-025-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-SS-007-26",
+    "centroCostoNombre": "DIRECCIÓN DE AGENCIAMIENTO NAVIERO"
+  },
+  {
+    "correlativo": "ABS-GC-024-26",
+    "centroCostoNombre": "GLOBAL ENVIROMENT SERVICES, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-023-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GC-022-26",
+    "centroCostoNombre": "H&V LINEA NAVIERA, C.A"
+  },
+  {
+    "correlativo": "ABS-SS-006-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-021-26",
+    "centroCostoNombre": "A&N GLOBAL CONSULTING, C.A"
+  },
+  {
+    "correlativo": "ABS-SS-005-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GC-020-26",
+    "centroCostoNombre": "GLOBAL ENVIROMENT SERVICES, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-019-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GC-018-26",
+    "centroCostoNombre": "H&V LINEA NAVIERA, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-017-26",
+    "centroCostoNombre": "A&N GLOBAL CONSULTING, C.A"
+  },
+  {
+    "correlativo": "ABS-GC-016-26",
+    "centroCostoNombre": " AVANTE BUREAU SHIPPING CORPORACION, C.A"
+  },
+  {
+    "correlativo": "ABS-SS-004-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-020-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GF-019-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-021-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-020-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-SS-003-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-RP-005-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-SS-002-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GC-005-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-SS-001-26",
+    "centroCostoNombre": "GERENCIA DE SEGURIDAD Y SALUD LABORAL"
+  },
+  {
+    "correlativo": "ABS-GF-017-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GF-016-26",
+    "centroCostoNombre": "LM NAVIERA VI"
+  },
+  {
+    "correlativo": "ABS-GF-015-26",
+    "centroCostoNombre": "LM NAVIERA VI"
+  },
+  {
+    "correlativo": "ABS-GT-004-26",
+    "centroCostoNombre": "LM NAVIERA VII"
+  },
+  {
+    "correlativo": "ABS-GF-014-26",
+    "centroCostoNombre": "LM NAVIERA II"
+  },
+  {
+    "correlativo": "ABS-GF-013-26",
+    "centroCostoNombre": "LM NAVIERA VI"
+  },
+  {
+    "correlativo": "ABS-GF-012-26",
+    "centroCostoNombre": "LM NAVIERA IV"
+  },
+  {
+    "correlativo": "ABS-GF-011-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GP-019-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-018-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GF-010-26",
+    "centroCostoNombre": "LM NAVIERA I"
+  },
+  {
+    "correlativo": "ABS-GF-009-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-LT-002-26",
+    "centroCostoNombre": "GERENCIA DE LOGÍSTICA Y TRANSPORTE"
+  },
+  {
+    "correlativo": "ABS-GF-008-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-CT-002-26",
+    "centroCostoNombre": " AVANTE BUREAU SHIPPING CORPORACION, C.A"
+  },
+  {
+    "correlativo": "ABS-GT-003-26",
+    "centroCostoNombre": "LM NAVIERA VII"
+  },
+  {
+    "correlativo": "ABS-GF-007-26",
+    "centroCostoNombre": "LM NAVIERA II"
+  },
+  {
+    "correlativo": "ABS-GF-006-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GF-005-26",
+    "centroCostoNombre": "MN RIO CARONI"
+  },
+  {
+    "correlativo": "ABS-GF-004-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-LT-001-26",
+    "centroCostoNombre": "DRAGA MARIO OLIVA PEREZ"
+  },
+  {
+    "correlativo": "ABS-RP-004-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-GT-002-26",
+    "centroCostoNombre": "E/T BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-017-26",
+    "centroCostoNombre": "MN VIRGEN DE COROMOTO"
+  },
+  {
+    "correlativo": "ABS-GT-001-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-004-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-RP-003-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-GP-016-26",
+    "centroCostoNombre": "GERENCIA DE CONTRATACIONES"
+  },
+  {
+    "correlativo": "ABS-AV-001-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GF-003-26",
+    "centroCostoNombre": "GERENCIA DE FLOTA"
+  },
+  {
+    "correlativo": "ABS-GP-015-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-014-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-013-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-012-26",
+    "centroCostoNombre": "DIRECCIÓN DE OPERACIONES"
+  },
+  {
+    "correlativo": "ABS-GP-011-26",
+    "centroCostoNombre": "LM NAVIERA IV"
+  },
+  {
+    "correlativo": "ABS-GP-010-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GP-009-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-003-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-008-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-007-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GP-006-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GP-005-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-RP-002-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-RP-001-26",
+    "centroCostoNombre": "GERENCIA DE RELACIONES PÚBLICAS E INSTITUCIONALES"
+  },
+  {
+    "correlativo": "ABS-CT-001-26",
+    "centroCostoNombre": " AVANTE BUREAU SHIPPING CORPORACION, C.A"
+  },
+  {
+    "correlativo": "ABS-GP-004-26",
+    "centroCostoNombre": "RM LADY DEBBIE"
+  },
+  {
+    "correlativo": "ABS-GP-003-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GC-002-26",
+    "centroCostoNombre": "ET BOCA GRANDE II"
+  },
+  {
+    "correlativo": "ABS-GC-001-26",
+    "centroCostoNombre": "DIRECCIÓN DE AGENCIAMIENTO NAVIERO"
+  },
+  {
+    "correlativo": "ABS-GP-002-26",
+    "centroCostoNombre": "GERENCIA DE SEGURIDAD Y SALUD LABORAL"
+  },
+  {
+    "correlativo": "ABS-GP-001-26",
+    "centroCostoNombre": "MN ANGEL FALLS"
+  },
+  {
+    "correlativo": "ABS-GF-002-26",
+    "centroCostoNombre": "LM NAVIERA III"
+  },
+  {
+    "correlativo": "ABS-GF-001-26",
+    "centroCostoNombre": "LM NAVIERA IV"
+  }
+]

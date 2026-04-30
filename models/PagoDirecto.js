@@ -28,6 +28,21 @@ const PagoDirecto = sequelize.define('PagoDirecto', {
         type: DataTypes.STRING,
         defaultValue: 'USD'
     },
+    monedaPago: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        comment: 'Moneda en que se realiza el pago: USD o Bs'
+    },
+    tasaDelDia: {
+        type: DataTypes.DECIMAL(15, 4),
+        allowNull: true,
+        comment: 'Tasa de cambio BCV del día al momento del pago'
+    },
+    montoAlCambio: {
+        type: DataTypes.DECIMAL(15, 2),
+        allowNull: true,
+        comment: 'Equivalente del monto en la otra moneda (si paga en Bs => montoAlCambio en USD, y viceversa)'
+    },
     beneficiario: {
         type: DataTypes.STRING,
         allowNull: false

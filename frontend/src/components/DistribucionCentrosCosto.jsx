@@ -26,6 +26,21 @@ const DistribucionCentrosCosto = ({ total, centros, onChange, moneda = 'USD', in
         }
     }, [centros, initialLines]);
 
+    // Sincronizar automáticamente si solo hay una línea (facilita la UX y evita diferencias por redondeo)
+    useEffect(() => {
+        if (lineas.length === 1 && (!initialLines || initialLines.length === 0)) {
+            if (lineas[0].monto !== total) {
+                const nuevas = [{
+                    ...lineas[0],
+                    monto: total,
+                    porcentaje: 100
+                }];
+                setLineas(nuevas);
+                onChange(nuevas);
+            }
+        }
+    }, [total]);
+
     const handleAdd = () => {
         const nueva = {
             key: Date.now(),
@@ -76,14 +91,14 @@ const DistribucionCentrosCosto = ({ total, centros, onChange, moneda = 'USD', in
                 rowKey="key"
                 footer={() => (
                     <Row gutter={16} style={{ fontWeight: 'bold' }}>
-                        <Col span={10}>TOTAL ASIGNADO:</Col>
-                        <Col span={6}>{moneda} {sumaMontos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</Col>
-                        <Col span={4}>{sumaPorcentajes.toFixed(2)}%</Col>
+                        <Col span={10}><span>TOTAL ASIGNADO:</span></Col>
+                        <Col span={6}><span>{moneda} {sumaMontos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span></Col>
+                        <Col span={4}><span>{sumaPorcentajes.toFixed(2)}%</span></Col>
                         <Col span={4}>
                             {Math.abs(diferencia) > 0.01 ? (
-                                <Text type="danger">Dif: {diferencia.toFixed(2)}</Text>
+                                <Text type="danger" key="diff_err"><span>Dif: {diferencia.toFixed(2)}</span></Text>
                             ) : (
-                                <Text type="success">✓ OK</Text>
+                                <Text type="success" key="diff_ok"><span>✓ OK</span></Text>
                             )}
                         </Col>
                     </Row>
@@ -94,9 +109,15 @@ const DistribucionCentrosCosto = ({ total, centros, onChange, moneda = 'USD', in
                     dataIndex="centroCostoId"
                     render={(val, record) => (
                         <Select
-                            placeholder="Seleccione"
+                            showSearch
+                            placeholder="Seleccione o busque..."
                             style={{ width: '100%' }}
                             value={val}
+                            status={!val ? 'error' : ''}
+                            optionFilterProp="children"
+                            filterOption={(input, option) =>
+                                (option?.children ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                            }
                             onChange={(v) => handleUpdate(record.key, 'centroCostoId', v)}
                         >
                             {centros.map(c => <Select.Option key={c.id} value={c.id}>{c.nombre}</Select.Option>)}

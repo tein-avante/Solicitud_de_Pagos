@@ -92,7 +92,7 @@ const Solicitud = sequelize.define('Solicitud', {
     },
     // Flujo: Pendiente -> Autorizado -> Aprobado -> Pagado -> Cerrado
     estatus: {
-        type: DataTypes.ENUM('Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado'),
+        type: DataTypes.ENUM('Pendiente', 'Autorizado', 'Aprobado', 'En Trámite', 'Pagado', 'Cerrado', 'Rechazado', 'Devuelto', 'Anulado', 'Devolución en compras'),
         defaultValue: 'Pendiente'
     },
     // IDs de los usuarios involucrados en cada etapa
@@ -119,6 +119,11 @@ const Solicitud = sequelize.define('Solicitud', {
     comentarios: {
         type: DataTypes.JSON,
         defaultValue: []
+    },
+    // IDs de los centros de costo asociados (Sincronizado con DistribucionGasto)
+    centrosCostoIds: {
+        type: DataTypes.JSON,
+        allowNull: true
     }
 }, {
     timestamps: true // Agrega createdAt y updatedAt automáticamente

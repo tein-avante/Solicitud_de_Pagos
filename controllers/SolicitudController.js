@@ -168,19 +168,40 @@ class SolicitudController {
           }
         }
 
-        if (Array.isArray(distribucionParsed) && distribucionParsed.length > 0) {
-          for (const linea of distribucionParsed) {
-            if (linea.centroCostoId) {
-              await DistribucionGasto.create({
-                solicitudId: nuevaSolicitud.id,
-                centroCostoId: linea.centroCostoId,
-                monto: parseFloat(linea.monto) || 0,
-                porcentaje: parseFloat(linea.porcentaje) || 0,
-                descripcion: linea.descripcion || ''
-              }, { transaction: t });
-            }
-          }
+        // Validación obligatoria de Centros de Costo
+        if (!Array.isArray(distribucionParsed) || distribucionParsed.length === 0) {
+          await t.rollback();
+          return res.status(400).json({ error: 'Debe asignar al menos un Centro de Costo a la solicitud' });
         }
+
+        // VALIDACIÓN DE MONTO TOTAL VS DISTRIBUCIÓN
+        const sumaDistribucion = distribucionParsed.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0);
+        const montoTotalNum = parseFloat(montoTotal) || 0;
+
+        if (Math.abs(sumaDistribucion - montoTotalNum) > 0.01) {
+          await t.rollback();
+          return res.status(400).json({ 
+            error: `La suma de los Centros de Costo (${sumaDistribucion.toFixed(2)}) no coincide con el Monto Total (${montoTotalNum.toFixed(2)})` 
+          });
+        }
+
+        for (const linea of distribucionParsed) {
+          if (!linea.centroCostoId) {
+            await t.rollback();
+            return res.status(400).json({ error: 'Cada línea de distribución debe tener un Centro de Costo asignado' });
+          }
+          await DistribucionGasto.create({
+            solicitudId: nuevaSolicitud.id,
+            centroCostoId: linea.centroCostoId,
+            monto: parseFloat(linea.monto) || 0,
+            porcentaje: parseFloat(linea.porcentaje) || 0,
+            descripcion: linea.descripcion || ''
+          }, { transaction: t });
+        }
+
+        // Actualizar la solicitud con los IDs de Centros de Costo (Sincronización)
+        const ids = [...new Set(distribucionParsed.map(d => d.centroCostoId))];
+        await nuevaSolicitud.update({ centrosCostoIds: ids }, { transaction: t });
 
         await t.commit();
 
@@ -332,24 +353,21 @@ class SolicitudController {
    */
   async listar(req, res) {
     try {
-      const { estatus, pagina = 1, limite = 10 } = req.query;
+      // 1. Validar y normalizar parámetros de paginación
+      let { pagina = 1, limite = 10, estatus, proveedorId, unidadSolicitante, centroCostoId } = req.query;
+      
+      const page = Math.max(1, parseInt(pagina) || 1);
+      const limit = Math.max(1, parseInt(limite) || 10);
+      const offset = (page - 1) * limit;
+
       const where = {};
-
       const esAdmin = req.usuario.rol?.toLowerCase() === 'administrador';
-
       const esAuditor = req.usuario.rol?.toLowerCase() === 'auditor';
 
+      // 2. Filtros de seguridad por rol
       if (!esAdmin && !esAuditor) {
         const esGestor = req.usuario.rol?.toLowerCase() === 'gestor';
         let departamentosParaFiltrar = [req.usuario.departamento];
-
-        const parseJsonArray = (val) => {
-          let parsed = val;
-          while (typeof parsed === 'string' && parsed.trim().startsWith('[')) {
-            try { parsed = JSON.parse(parsed); } catch (e) { break; }
-          }
-          return Array.isArray(parsed) ? parsed : [];
-        };
 
         if (esGestor && req.usuario.departamentosAutorizados) {
           const extras = parseJsonArray(req.usuario.departamentosAutorizados);
@@ -359,70 +377,76 @@ class SolicitudController {
         where.unidadSolicitante = { [Op.in]: departamentosParaFiltrar };
       }
 
-
-      else {
-      }
-
-
-
+      // 3. Aplicar filtros de búsqueda con limpieza (.trim())
       if (estatus) {
-        where.estatus = estatus;
+        where.estatus = estatus.trim();
       }
 
-      if (req.query.proveedorId) {
+      if (proveedorId) {
         where[Op.and] = where[Op.and] || [];
         where[Op.and].push(
           sequelize.where(
             sequelize.fn('JSON_EXTRACT', sequelize.col('proveedor'), sequelize.literal(`'$.id'`)),
-            req.query.proveedorId
+            proveedorId.toString().trim()
           )
         );
       }
 
-      if (req.query.unidadSolicitante) {
-        where.unidadSolicitante = req.query.unidadSolicitante;
+      if (unidadSolicitante) {
+        where.unidadSolicitante = unidadSolicitante.trim();
       }
 
-      // Filtro por Centro de Costo (Buscando en la tabla de Distribución)
-      const include = [];
-      if (req.query.centroCostoId) {
-        include.push({
-          model: DistribucionGasto,
-          where: { centroCostoId: req.query.centroCostoId },
-          required: true
-        });
+      // 4. Configurar Eager Loading (Include) para optimizar rendimiento
+      const include = [
+        { model: Usuario, as: 'elaborador', attributes: ['nombre'] },
+        { model: Usuario, as: 'autorizador', attributes: ['nombre'] },
+        { model: Usuario, as: 'procesador', attributes: ['nombre'] }
+      ];
+
+      // Filtro por Centro de Costo (Buscando en la nueva columna JSON centrosCostoIds)
+      if (centroCostoId) {
+        const parsedId = parseInt(centroCostoId);
+        if (!isNaN(parsedId)) {
+          // Usamos JSON_CONTAINS para verificar si el ID está en el arreglo guardado en la tabla Solicitudes
+          where[Op.and] = where[Op.and] || [];
+          where[Op.and].push(
+            sequelize.fn('JSON_CONTAINS', sequelize.col('centrosCostoIds'), JSON.stringify(parsedId))
+          );
+        }
       }
 
+      // 5. Ejecutar consulta (Sin límite por página a petición del usuario)
       const { rows: solicitudesRows, count: total } = await Solicitud.findAndCountAll({
         where,
         include,
-        distinct: true, // Importante para conteo correcto con joins
+        distinct: true, 
         order: [['createdAt', 'DESC']]
       });
 
-      // Mapear resultados para incluir nombres de usuarios
-      const solicitudes = await Promise.all(solicitudesRows.map(async sol => {
-        const elaborado = sol.elaboradoPor ? await Usuario.findByPk(sol.elaboradoPor, { attributes: ['nombre'] }) : null;
-        const autorizado = sol.autorizadoPor ? await Usuario.findByPk(sol.autorizadoPor, { attributes: ['nombre'] }) : null;
-        const procesado = sol.procesadoPor ? await Usuario.findByPk(sol.procesadoPor, { attributes: ['nombre'] }) : null;
-
+      // 6. Mapear resultados (los nombres ya vienen en el include)
+      const solicitudes = solicitudesRows.map(sol => {
+        const solJson = sol.toJSON();
         return {
-          ...sol.toJSON(),
-          elaboradoPorNombre: elaborado ? elaborado.nombre : 'N/A',
-          autorizadoPorNombre: autorizado ? autorizado.nombre : null,
-          procesadoPorNombre: procesado ? procesado.nombre : null
+          ...solJson,
+          elaboradoPorNombre: sol.elaborador ? sol.elaborador.nombre : 'N/A',
+          autorizadoPorNombre: sol.autorizador ? sol.autorizador.nombre : null,
+          procesadoPorNombre: sol.procesador ? sol.procesador.nombre : null,
+          // Limpiar objetos de inclusión para reducir tamaño del JSON si no se necesitan
+          elaborador: undefined,
+          autorizador: undefined,
+          procesador: undefined
         };
-      }));
+      });
 
       res.json({
         solicitudes,
-        totalPaginas: Math.ceil(total / limite),
-        paginaActual: parseInt(pagina),
+        totalPaginas: 1,
+        paginaActual: 1,
         total
       });
     } catch (error) {
       console.error('[LIST ERROR]:', error);
-      res.status(500).json({ error: 'Error en el servidor' });
+      res.status(500).json({ error: 'Error en el servidor', detalles: error.message });
     }
   }
 
@@ -580,8 +604,8 @@ class SolicitudController {
       const esGestor = req.usuario.rol?.toLowerCase() === 'gestor';
 
       if (!esAdmin) {
-        // El Auditor PUEDE DEVOLVER cualquier solicitud
-        if (esAuditor && estatus === 'Devuelto') {
+        // El Auditor PUEDE DEVOLVER cualquier solicitud o marcar Devolución en compras
+        if (esAuditor && (estatus === 'Devuelto' || estatus === 'Devolución en compras')) {
           // Acceso concedido globalmente para Devolver
         }
         // El Gerente (Gestor) PUEDE AUTORIZAR solicitudes de su departamento o departamentos asignados
@@ -639,17 +663,21 @@ class SolicitudController {
         'Pendiente': ['Autorizado', 'Rechazado', 'Devuelto', 'Anulado'],
         'Autorizado': ['Aprobado', 'Rechazado', 'Devuelto'],
         'Aprobado': ['Pagado', 'Rechazado', 'Devuelto'],
-        'Pagado': ['En Trámite', 'Cerrado'],
-        'En Trámite': ['Cerrado', 'Devuelto'],
+        'Pagado': ['En Trámite', 'Cerrado', 'Devolución en compras'],
+        'En Trámite': ['Cerrado', 'Devuelto', 'Devolución en compras'],
         'Cerrado': [],
         'Rechazado': [],
         'Devuelto': ['Pendiente'],
-        'Anulado': ['Pendiente']
+        'Anulado': ['Pendiente'],
+        'Devolución en compras': ['En Trámite', 'Cerrado']
       };
 
-      if (!transicionesValidas[solicitud.estatus].includes(estatus)) {
+      const currentStatus = solicitud.estatus?.trim();
+      const targetStatus = estatus?.trim();
+
+      if (!transicionesValidas[currentStatus] || !transicionesValidas[currentStatus].includes(targetStatus)) {
         return res.status(400).json({
-          error: `No se puede cambiar de ${solicitud.estatus} a ${estatus}`
+          error: `No se puede cambiar de ${currentStatus} a ${targetStatus}`
         });
       }
 
@@ -1057,7 +1085,7 @@ class SolicitudController {
       doc.font('Helvetica').fontSize(8).text(solicitud.metodoPago, 320, ccY + 4);
 
       doc.font('Helvetica-Bold').fontSize(7).text('MONTO TOTAL A PAGAR:', 215, ccY + 22);
-      doc.font('Helvetica').fontSize(10).text(`${solicitud.moneda} ${parseFloat(solicitud.montoTotal || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 215, ccY + 32);
+      doc.font('Helvetica').fontSize(11).text(`${solicitud.moneda} ${parseFloat(solicitud.montoTotal || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })}`, 215, ccY + 35);
 
       // Tipo de pago (checkboxes) — posicionados en la parte inferior derecha
       const tipoY = ccY + ccHeight - 18;
@@ -1252,17 +1280,37 @@ class SolicitudController {
       const formPages = await mergedPdf.copyPages(formPdf, formPdf.getPageIndices());
       formPages.forEach(p => mergedPdf.addPage(p));
 
-      // 2. Agregar Comprobante de Pago (si existe y es PDF)
-      if (solicitud.comprobantePago && solicitud.comprobantePago.toLowerCase().endsWith('.pdf')) {
+      // 2. Agregar Comprobante de Pago (PDF o Imagen)
+      if (solicitud.comprobantePago) {
         try {
-          const voucherPath = path.resolve(process.cwd(), solicitud.comprobantePago);
+          const cleanVoucherPath = solicitud.comprobantePago.startsWith('/') ? solicitud.comprobantePago.substring(1) : solicitud.comprobantePago;
+          const voucherPath = path.resolve(process.cwd(), cleanVoucherPath);
+          
           if (fs.existsSync(voucherPath)) {
             const voucherBuffer = fs.readFileSync(voucherPath);
-            const voucherPdf = await PDFLibDocument.load(voucherBuffer);
-            const voucherPages = await mergedPdf.copyPages(voucherPdf, voucherPdf.getPageIndices());
-            voucherPages.forEach(p => mergedPdf.addPage(p));
+            const voucherLower = voucherPath.toLowerCase();
+
+            if (voucherLower.endsWith('.pdf')) {
+              const voucherPdf = await PDFLibDocument.load(voucherBuffer);
+              const voucherPages = await mergedPdf.copyPages(voucherPdf, voucherPdf.getPageIndices());
+              voucherPages.forEach(p => mergedPdf.addPage(p));
+            } else if (voucherLower.endsWith('.jpg') || voucherLower.endsWith('.jpeg')) {
+              const img = await mergedPdf.embedJpg(voucherBuffer);
+              const page = mergedPdf.addPage();
+              const { width, height } = page.getSize();
+              const sc = img.scaleToFit(width - 40, height - 40);
+              page.drawImage(img, { x: (width - sc.width) / 2, y: (height - sc.height) / 2, width: sc.width, height: sc.height });
+            } else if (voucherLower.endsWith('.png') || voucherLower.endsWith('.webp')) {
+              const img = await mergedPdf.embedPng(voucherBuffer);
+              const page = mergedPdf.addPage();
+              const { width, height } = page.getSize();
+              const sc = img.scaleToFit(width - 40, height - 40);
+              page.drawImage(img, { x: (width - sc.width) / 2, y: (height - sc.height) / 2, width: sc.width, height: sc.height });
+            }
           }
-        } catch (e) { console.error('[MERGE] Error al agregar Comprobante:', e.message); }
+        } catch (e) {
+          console.error('[MERGE] Error al agregar Comprobante:', e.message);
+        }
       }
 
       // 3. Agregar Soportes - parsear por si viene como string doble-codificado
@@ -1342,15 +1390,18 @@ class SolicitudController {
    */
   async exportarDatos(req, res) {
     try {
-      if (req.usuario.rol?.toLowerCase() !== 'administrador' && req.usuario.rol?.toLowerCase() !== 'gestor') {
+      if (req.usuario.rol?.toLowerCase() !== 'administrador' &&
+          req.usuario.rol?.toLowerCase() !== 'gestor' &&
+          req.usuario.rol?.toLowerCase() !== 'auditor') {
         return res.status(403).json({ error: 'No tiene permisos para exportar datos' });
       }
 
       const { formato = 'xlsx', estatus, desde, hasta } = req.query;
       const where = {};
 
-      // Restricción por departamento (Gestores y otros roles no admin)
-      if (req.usuario.rol?.toLowerCase() !== 'administrador') {
+      // Restricción por departamento (Gestores y otros roles no admin/auditor)
+      if (req.usuario.rol?.toLowerCase() !== 'administrador' &&
+          req.usuario.rol?.toLowerCase() !== 'auditor') {
         const esGestor = req.usuario.rol?.toLowerCase() === 'gestor';
         let departamentosParaFiltrar = [req.usuario.departamento];
 
@@ -1382,7 +1433,7 @@ class SolicitudController {
       // Obtener todas las solicitudes filtradas incluyendo su distribución
       const solicitudes = await Solicitud.findAll({ 
         where, 
-        include: [{ model: DistribucionGasto, include: [CentroCosto] }],
+        include: [{ model: DistribucionGasto, as: 'distribucionCentros', include: [CentroCosto] }],
         order: [['createdAt', 'DESC']] 
       });
 
@@ -1401,7 +1452,10 @@ class SolicitudController {
         let colorHex = null; // No color by default
 
         // Lógica de mapeo a leyenda
-        if (sol.estatus === 'Creado' || sol.estatus === 'Pendiente') {
+        if (sol.estatus === 'Anulado') {
+          visualStatus = 'ANULADO';
+          colorHex = '#CCE5FF'; // Azul claro
+        } else if (sol.estatus === 'Creado' || sol.estatus === 'Pendiente') {
           visualStatus = 'PENDIENTE';
           colorHex = '#FFCCCC'; // Rosa/Rojo claro
         } else if (sol.estatus === 'Aprobado') {
@@ -1413,9 +1467,12 @@ class SolicitudController {
         } else if (sol.tipoPago === 'Anticipo') {
           visualStatus = 'ANTICIPO';
           colorHex = '#FFFFCC'; // Amarillo claro
-        } else if (sol.estatus === 'Rechazado' || sol.estatus === 'Anulado') {
+        } else if (sol.estatus === 'Rechazado') {
           visualStatus = 'CERRADO';
           colorHex = '#CCE5FF'; // Azul claro
+        } else if (sol.estatus === 'Devolución en compras') {
+          visualStatus = 'DEVOLUCIÓN';
+          colorHex = '#FFB366'; // Naranja/Ámbar suave
         }
 
         return {
@@ -1423,7 +1480,7 @@ class SolicitudController {
           'CÓDIGO': sol.correlativo,
           'FECHA': sol.fechaSolicitud ? new Date(sol.fechaSolicitud).toLocaleDateString() : '',
           'DEPARTAMENTO': sol.unidadSolicitante,
-          'CENTRO DE COSTO': sol.DistribucionGastos?.map(d => d.CentroCosto?.nombre || 'S/C').join(' / ') || 'N/A',
+          'CENTRO DE COSTO': sol.distribucionCentros?.map(d => d.CentroCosto?.nombre || 'S/C').join(' / ') || 'N/A',
           'ORDEN DE COMPRA': sol.numeroRequerimiento || '',
           'PROVEEDOR': proveedor.razonSocial || '',
           'MONTO ($)': (moneda === 'USD') ? monto : null,
@@ -1747,7 +1804,9 @@ class SolicitudController {
 
       let subheader = `Fecha de Corte: ${new Date().toLocaleDateString()}`;
       if (desde && hasta) {
-        subheader = `Periodo: ${new Date(desde).toLocaleDateString()} al ${new Date(hasta).toLocaleDateString()} | ${subheader}`;
+        // Usar timeZone UTC para evitar desfase de -1 día por diferencia horaria local
+        const fmtUTC = (d) => new Date(d).toLocaleDateString('es-VE', { timeZone: 'UTC' });
+        subheader = `Periodo: ${fmtUTC(desde)} al ${fmtUTC(hasta)} | ${subheader}`;
       }
       doc.fontSize(8).font('Helvetica').text(subheader, { align: 'right' });
       doc.moveDown(2);
@@ -1756,9 +1815,9 @@ class SolicitudController {
       const blueHeader = '#1b4f72';
       let isFirstUnidad = true;
 
-      // Altura de página A4 landscape en puntos: 841.89
-      const PAGE_HEIGHT_REL = 841.89;
-      const MARGIN_BOTTOM = 40; // margen inferior de seguridad
+      // Altura de página A4 landscape en puntos: 595.28 (Antes estaba en 841.89 que es portrait)
+      const PAGE_HEIGHT_REL = 595.28;
+      const MARGIN_BOTTOM = 60; // margen inferior de seguridad aumentado de 40 a 60
       const MIN_ROW_H = 20;    // altura mínima por fila
       const SUBTOTAL_H = 30;   // espacio fijo para fila de subtotal
       const HEADER_H_REL = 30; // altura de encabezado de tabla
@@ -1803,7 +1862,7 @@ class SolicitudController {
 
             return [
               (sol.conceptoPago || '').trim(),
-              (sol.unidadSolicitante || 'N/A').trim(),
+              // Departamento eliminado: ya aparece en el encabezado del grupo
               sol.numeroRequerimiento || sol.correlativo || 'N/A',
               monto.toLocaleString('es-VE', { minimumFractionDigits: 2 }),
               sol.metodoPago || 'N/A',
@@ -1818,17 +1877,18 @@ class SolicitudController {
 
           const table = {
             headers: [
-              { label: 'Descripción', property: 'descripcion', width: 135, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Departamento', property: 'unidad', width: 65, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Código O/C', property: 'oc', width: 65, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Monto', property: 'monto', width: 58, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Método pago', property: 'metodo', width: 62, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Moneda', property: 'moneda', width: 58, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Tasa BCV', property: 'tasa', width: 52, align: 'right', headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Proveedor', property: 'proveedor', width: 75, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Fecha inc.', property: 'fecha', width: 50, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Comprador', property: 'comprador', width: 60, headerColor: blueHeader, headerOpacity: 1 },
-              { label: 'Estatus', property: 'estatus', width: 55, headerColor: blueHeader, headerOpacity: 1 }
+              // Departamento eliminado: ya aparece en el encabezado del grupo (ahorra ~100pts)
+              // Ancho total = 775 pts (A4 Landscape con margenes)
+              { label: 'Descripción',   property: 'descripcion', width: 170, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Código O/C',    property: 'oc',          width: 65,  headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Monto',          property: 'monto',       width: 65,  align: 'right', headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Método pago',   property: 'metodo',      width: 65,  headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Moneda',         property: 'moneda',      width: 55,  headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Tasa BCV',       property: 'tasa',        width: 50,  align: 'right', headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Proveedor',      property: 'proveedor',   width: 130, headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Fecha inc.',     property: 'fecha',       width: 50,  headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Comprador',      property: 'comprador',   width: 60,  headerColor: blueHeader, headerOpacity: 1 },
+              { label: 'Estatus',        property: 'estatus',     width: 65,  headerColor: blueHeader, headerOpacity: 1 }
             ],
             rows
           };
@@ -1846,19 +1906,22 @@ class SolicitudController {
             }
           });
 
-          // --- FILA DE SUBTOTAL POR UNIDAD ---
-          // Si el subtotal no cabe, saltar a nueva página
-          if (doc.y + SUBTOTAL_H > PAGE_HEIGHT_REL - MARGIN_BOTTOM) {
+          // --- FILA DE SUBTOTAL POR UNIDAD (Dinámica por largo de texto) ---
+          const subtotalText = `Subtotal ${unidad}: ${subtotalFila.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`;
+          const hTextSubtotal = doc.heightOfString(subtotalText, { width: 765 });
+          const barHeight = Math.max(20, hTextSubtotal + 10);
+
+          if (doc.y + barHeight + 5 > PAGE_HEIGHT_REL - MARGIN_BOTTOM) {
             doc.addPage();
           }
 
           const currentY = doc.y + 2;
-          doc.rect(20, currentY, 775, 20).fill(blueHeader).stroke();
+          doc.rect(20, currentY, 775, barHeight).fill(blueHeader).stroke();
           doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
-          doc.text(
-            `Subtotal ${unidad}: ${subtotalFila.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`,
-            25, currentY + 6
-          );
+          doc.text(subtotalText, 25, currentY + Math.floor((barHeight - hTextSubtotal) / 2) + 2, {
+            width: 765,
+            align: 'left'
+          });
           doc.moveDown(1.5);
           console.log(`[REPORTE DEBUG] Unidad ${unidad} finalizada`);
         } catch (e) {
@@ -1910,15 +1973,15 @@ class SolicitudController {
       }
 
       // Procesar campos JSON si vienen como string (como en la creación)
-      if (data.proveedor && typeof data.proveedor === 'string') data.proveedor = JSON.parse(data.proveedor);
-      if (data.datosBancarios && typeof data.datosBancarios === 'string') data.datosBancarios = JSON.parse(data.datosBancarios);
-      if (data.tiposSoporte && typeof data.tiposSoporte === 'string') {
-        try {
-          data.tiposSoporte = JSON.parse(data.tiposSoporte);
-        } catch (e) {
-          data.tiposSoporte = [data.tiposSoporte];
-        }
-      }
+      const safeParse = (val) => {
+        if (!val || val === 'undefined' || val === 'null') return null;
+        if (typeof val !== 'string') return val;
+        try { return JSON.parse(val); } catch (e) { return null; }
+      };
+
+      if (data.proveedor) data.proveedor = safeParse(data.proveedor);
+      if (data.datosBancarios) data.datosBancarios = safeParse(data.datosBancarios);
+      if (data.tiposSoporte) data.tiposSoporte = safeParse(data.tiposSoporte) || [];
 
       // Campos permitidos para actualizar (Eliminamos centroCosto de la lista)
       const camposPermitidos = [
@@ -1971,6 +2034,17 @@ class SolicitudController {
 
         // Si se envió una distribución, actualizamos (limpiar y re-insertar)
         if (Array.isArray(distribucionParsed)) {
+          // VALIDACIÓN DE MONTO TOTAL VS DISTRIBUCIÓN EN ACTUALIZACIÓN
+          const sumaDistribucion = distribucionParsed.reduce((acc, curr) => acc + (parseFloat(curr.monto) || 0), 0);
+          const totalAValidar = data.montoTotal !== undefined ? parseFloat(data.montoTotal) : parseFloat(solicitud.montoTotal);
+
+          if (Math.abs(sumaDistribucion - totalAValidar) > 0.01) {
+            await t.rollback();
+            return res.status(400).json({ 
+              error: `La suma de los Centros de Costo (${sumaDistribucion.toFixed(2)}) no coincide con el Monto Total (${totalAValidar.toFixed(2)})` 
+            });
+          }
+
           // 1. Eliminar anteriores
           await DistribucionGasto.destroy({
             where: { solicitudId: id },
@@ -1989,6 +2063,10 @@ class SolicitudController {
               }, { transaction: t });
             }
           }
+
+          // 3. Sincronizar columna centrosCostoIds en la tabla principal
+          const ids = [...new Set(distribucionParsed.map(d => d.centroCostoId))].filter(Boolean);
+          await solicitud.update({ centrosCostoIds: ids }, { transaction: t });
         }
 
         await t.commit();

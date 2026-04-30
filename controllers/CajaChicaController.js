@@ -3,15 +3,38 @@ const GastoCajaChica = require('../models/GastoCajaChica');
 const DistribucionGasto = require('../models/DistribucionGasto');
 const ArqueoCajaChica = require('../models/ArqueoCajaChica');
 const ReposicionCajaChica = require('../models/ReposicionCajaChica');
+const IngresoCajaChica = require('../models/IngresoCajaChica');
 const Usuario = require('../models/Usuario');
 const CentroCosto = require('../models/CentroCosto');
 const Solicitud = require('../models/Solicitud');
 const sequelize = require('../config/database');
+const { Op } = require('sequelize');
 const sistemaService = require('../services/sistemaService');
+
+const esAdministrador = (usuario = {}) => usuario?.rol?.toLowerCase() === 'administrador';
+
+const validarAccesoCaja = (caja, usuario) => {
+    if (!caja) {
+        const error = new Error('Caja Chica no encontrada');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!esAdministrador(usuario) && Number(caja.responsableId) !== Number(usuario?.id)) {
+        const error = new Error('No tienes permiso para acceder a esta Caja Chica');
+        error.statusCode = 403;
+        throw error;
+    }
+};
 
 exports.getCajasChicas = async (req, res) => {
     try {
+        const where = esAdministrador(req.usuario)
+            ? {}
+            : { responsableId: req.usuario.id };
+
         const cajas = await CajaChica.findAll({
+            where,
             include: [{ model: Usuario, as: 'responsable', attributes: ['nombre', 'email'] }]
         });
         res.json(cajas);
@@ -22,6 +45,10 @@ exports.getCajasChicas = async (req, res) => {
 
 exports.createCajaChica = async (req, res) => {
     try {
+        if (!esAdministrador(req.usuario)) {
+            return res.status(403).json({ error: 'Solo los administradores pueden crear Cajas Chicas' });
+        }
+
         const { nombre, responsableId, montoInicial, moneda } = req.body;
         const caja = await CajaChica.create({
             nombre,
@@ -107,16 +134,21 @@ exports.registerGasto = async (req, res) => {
             try { distParsed = JSON.parse(distribucion); } catch (e) { }
         }
 
-        if (distParsed && Array.isArray(distParsed)) {
-            for (const d of distParsed) {
-                await DistribucionGasto.create({
-                    gastoCajaChicaId: gasto.id,
-                    centroCostoId: d.centroCostoId,
-                    monto: d.monto,
-                    porcentaje: d.porcentaje,
-                    descripcion: d.descripcion
-                }, { transaction: t });
+        if (!distParsed || !Array.isArray(distParsed) || distParsed.length === 0) {
+            throw new Error('Debe asignar al menos un Centro de Costo');
+        }
+
+        for (const d of distParsed) {
+            if (!d.centroCostoId) {
+                throw new Error('Cada registro de distribución debe tener un Centro de Costo asignado');
             }
+            await DistribucionGasto.create({
+                gastoCajaChicaId: gasto.id,
+                centroCostoId: d.centroCostoId,
+                monto: d.monto,
+                porcentaje: d.porcentaje,
+                descripcion: d.descripcion
+            }, { transaction: t });
         }
 
         await caja.update({ saldoActual: nuevoSaldo }, { transaction: t });
@@ -130,10 +162,62 @@ exports.registerGasto = async (req, res) => {
     }
 };
 
+exports.deleteGasto = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const gasto = await GastoCajaChica.findByPk(id, { transaction: t });
+
+        if (!gasto) throw new Error('El gasto no existe');
+        
+        // Validación: Solo permitir eliminar si es Pendiente
+        if (gasto.estatus !== 'Pendiente') {
+            throw new Error(`No se puede eliminar un gasto con estatus: ${gasto.estatus}`);
+        }
+
+        const caja = await CajaChica.findByPk(gasto.cajaChicaId, { transaction: t });
+        validarAccesoCaja(caja, req.usuario);
+
+        // Actualizar el saldo de la caja (devolver el monto)
+        const nuevoSaldo = Number(caja.saldoActual) + Number(gasto.montoTotal);
+        await caja.update({ saldoActual: nuevoSaldo }, { transaction: t });
+
+        // Eliminar distribuciones asociadas
+        await DistribucionGasto.destroy({
+            where: { gastoCajaChicaId: id },
+            transaction: t
+        });
+
+        // Eliminar el gasto
+        await gasto.destroy({ transaction: t });
+
+        await t.commit();
+        await sistemaService.incrementarOperaciones();
+        res.json({ mensaje: 'Gasto eliminado con éxito', nuevoSaldo });
+    } catch (error) {
+        await t.rollback();
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
+};
+
 exports.getGastos = async (req, res) => {
     try {
         const { cajaChicaId } = req.query;
-        const where = cajaChicaId ? { cajaChicaId } : {};
+        const where = {};
+
+        if (cajaChicaId) {
+            const caja = await CajaChica.findByPk(cajaChicaId);
+            validarAccesoCaja(caja, req.usuario);
+            where.cajaChicaId = cajaChicaId;
+        } else if (!esAdministrador(req.usuario)) {
+            const cajasAsignadas = await CajaChica.findAll({
+                where: { responsableId: req.usuario.id },
+                attributes: ['id']
+            });
+            const cajasIds = cajasAsignadas.map(c => c.id);
+            where.cajaChicaId = { [Op.in]: cajasIds };
+        }
+
         const gastos = await GastoCajaChica.findAll({
             where,
             include: [
@@ -145,7 +229,7 @@ exports.getGastos = async (req, res) => {
         });
         res.json(gastos);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
@@ -154,7 +238,10 @@ exports.getHistory = async (req, res) => {
         const { id: cajaChicaId } = req.params;
         if (!cajaChicaId) return res.status(400).json({ error: 'ID de caja chica requerido' });
 
-        const [gastos, reposiciones, arqueos] = await Promise.all([
+        const caja = await CajaChica.findByPk(cajaChicaId);
+        validarAccesoCaja(caja, req.usuario);
+
+        const [gastos, reposiciones, arqueos, ingresos] = await Promise.all([
             GastoCajaChica.findAll({ 
                 where: { cajaChicaId }, 
                 include: [
@@ -164,26 +251,42 @@ exports.getHistory = async (req, res) => {
                 ] 
             }),
             ReposicionCajaChica.findAll({ where: { cajaChicaId } }),
-            ArqueoCajaChica.findAll({ where: { cajaChicaId }, include: [{ model: Usuario, as: 'elaboradoPor', attributes: ['nombre'] }] })
+            ArqueoCajaChica.findAll({ where: { cajaChicaId }, include: [{ model: Usuario, as: 'elaboradoPor', attributes: ['nombre'] }] }),
+            IngresoCajaChica.findAll({ where: { cajaChicaId }, include: [{ model: Usuario, as: 'registrador', attributes: ['nombre'] }] })
         ]);
 
         const historial = [
             ...gastos.map(g => ({ ...g.toJSON(), _tipoItem: 'Gasto', _fechaTimestamp: new Date(g.fecha).getTime() })),
             ...reposiciones.map(r => ({ ...r.toJSON(), _tipoItem: 'Reposicion', _fechaTimestamp: new Date(r.fechaSolicitud).getTime() })),
-            ...arqueos.map(a => ({ ...a.toJSON(), _tipoItem: 'Arqueo', _fechaTimestamp: new Date(a.fecha).getTime() }))
+            ...arqueos.map(a => ({ ...a.toJSON(), _tipoItem: 'Arqueo', _fechaTimestamp: new Date(a.fecha).getTime() })),
+            ...ingresos.map(i => ({ ...i.toJSON(), _tipoItem: 'Ingreso', _fechaTimestamp: new Date(i.fecha).getTime() }))
         ].sort((a, b) => b._fechaTimestamp - a._fechaTimestamp); // Descendente
 
         await sistemaService.incrementarOperaciones();
         res.json(historial);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
 exports.getArqueos = async (req, res) => {
     try {
         const { cajaChicaId } = req.query;
-        const where = cajaChicaId ? { cajaChicaId } : {};
+        const where = {};
+
+        if (cajaChicaId) {
+            const caja = await CajaChica.findByPk(cajaChicaId);
+            validarAccesoCaja(caja, req.usuario);
+            where.cajaChicaId = cajaChicaId;
+        } else if (!esAdministrador(req.usuario)) {
+            const cajasAsignadas = await CajaChica.findAll({
+                where: { responsableId: req.usuario.id },
+                attributes: ['id']
+            });
+            const cajasIds = cajasAsignadas.map(c => c.id);
+            where.cajaChicaId = { [Op.in]: cajasIds };
+        }
+
         const arqueos = await ArqueoCajaChica.findAll({
             where,
             include: [{ model: Usuario, as: 'elaboradoPor', attributes: ['nombre'] }],
@@ -192,7 +295,7 @@ exports.getArqueos = async (req, res) => {
         await sistemaService.incrementarOperaciones();
         res.json(arqueos);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
@@ -200,6 +303,7 @@ exports.performArqueo = async (req, res) => {
     try {
         const { cajaChicaId, saldoFisico, observaciones } = req.body;
         const caja = await CajaChica.findByPk(cajaChicaId);
+        validarAccesoCaja(caja, req.usuario);
         const diferencia = Number(saldoFisico) - Number(caja.saldoActual);
 
         const arqueo = await ArqueoCajaChica.create({
@@ -215,7 +319,7 @@ exports.performArqueo = async (req, res) => {
         await sistemaService.incrementarOperaciones();
         res.status(201).json(arqueo);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
@@ -223,6 +327,9 @@ exports.requestReposicion = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { cajaChicaId } = req.body;
+        const cajaValidar = await CajaChica.findByPk(cajaChicaId, { transaction: t });
+        validarAccesoCaja(cajaValidar, req.usuario);
+
         const gastos = await GastoCajaChica.findAll({
             where: { cajaChicaId, estatus: 'Pendiente' },
             transaction: t
@@ -292,17 +399,62 @@ exports.requestReposicion = async (req, res) => {
         });
     } catch (error) {
         await t.rollback();
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };
 
 exports.getReposiciones = async (req, res) => {
     try {
         const { cajaChicaId } = req.query;
-        const where = cajaChicaId ? { cajaChicaId } : {};
+        const where = {};
+
+        if (cajaChicaId) {
+            const caja = await CajaChica.findByPk(cajaChicaId);
+            validarAccesoCaja(caja, req.usuario);
+            where.cajaChicaId = cajaChicaId;
+        } else if (!esAdministrador(req.usuario)) {
+            const cajasAsignadas = await CajaChica.findAll({
+                where: { responsableId: req.usuario.id },
+                attributes: ['id']
+            });
+            const cajasIds = cajasAsignadas.map(c => c.id);
+            where.cajaChicaId = { [Op.in]: cajasIds };
+        }
+
         const reps = await ReposicionCajaChica.findAll({ where, order: [['createdAt', 'DESC']] });
         res.json(reps);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
+};
+
+exports.registerIngreso = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { cajaChicaId, fecha, concepto, monto } = req.body;
+        const usuarioId = req.usuario.id;
+
+        const caja = await CajaChica.findByPk(cajaChicaId, { transaction: t });
+        validarAccesoCaja(caja, req.usuario);
+
+        const nuevoSaldo = Number(caja.saldoActual) + Number(monto);
+
+        const ingreso = await IngresoCajaChica.create({
+            cajaChicaId,
+            usuarioId,
+            fecha,
+            concepto,
+            monto,
+            saldoResultante: nuevoSaldo
+        }, { transaction: t });
+
+        await caja.update({ saldoActual: nuevoSaldo }, { transaction: t });
+
+        await t.commit();
+        await sistemaService.incrementarOperaciones();
+        res.status(201).json(ingreso);
+    } catch (error) {
+        await t.rollback();
+        res.status(error.statusCode || 500).json({ error: error.message });
     }
 };

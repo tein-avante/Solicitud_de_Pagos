@@ -7,6 +7,7 @@ const CentroCosto = require('./models/CentroCosto');
 const ArqueoCajaChica = require('./models/ArqueoCajaChica');
 const ReposicionCajaChica = require('./models/ReposicionCajaChica');
 const Solicitud = require('./models/Solicitud');
+const IngresoCajaChica = require('./models/IngresoCajaChica');
 
 const setupAssociations = () => {
     // CajaChica
@@ -31,6 +32,9 @@ const setupAssociations = () => {
 
     // Solicitud
     Solicitud.hasMany(DistribucionGasto, { foreignKey: 'solicitudId', as: 'distribucionCentros' });
+    Solicitud.belongsTo(Usuario, { as: 'elaborador', foreignKey: 'elaboradoPor' });
+    Solicitud.belongsTo(Usuario, { as: 'autorizador', foreignKey: 'autorizadoPor' });
+    Solicitud.belongsTo(Usuario, { as: 'procesador', foreignKey: 'procesadoPor' });
 
     // Arqueo
     ArqueoCajaChica.belongsTo(CajaChica, { foreignKey: 'cajaChicaId' });
@@ -38,6 +42,11 @@ const setupAssociations = () => {
 
     // Reposicion
     ReposicionCajaChica.belongsTo(CajaChica, { foreignKey: 'cajaChicaId' });
+
+    // Ingreso
+    IngresoCajaChica.belongsTo(CajaChica, { foreignKey: 'cajaChicaId' });
+    IngresoCajaChica.belongsTo(Usuario, { as: 'registrador', foreignKey: 'usuarioId' });
+    CajaChica.hasMany(IngresoCajaChica, { foreignKey: 'cajaChicaId' });
 };
 
 module.exports = setupAssociations;
