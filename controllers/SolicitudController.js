@@ -378,8 +378,18 @@ class SolicitudController {
       }
 
       // 3. Aplicar filtros de búsqueda con limpieza (.trim())
-      if (estatus) {
-        where.estatus = estatus.trim();
+      // Varias etiquetas separadas por coma → Op.in (misma convención que reportes)
+      if (estatus !== undefined && estatus !== null && estatus !== '') {
+        const raw = Array.isArray(estatus) ? estatus[0] : estatus;
+        const trimmed = String(raw).trim();
+        if (trimmed) {
+          if (trimmed.includes(',')) {
+            const arr = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+            where.estatus = arr.length === 1 ? arr[0] : { [Op.in]: arr };
+          } else {
+            where.estatus = trimmed;
+          }
+        }
       }
 
       if (proveedorId) {

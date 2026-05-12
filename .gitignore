@@ -32,6 +32,10 @@ logs/
 *.swp
 *.swo
 
+# Plans (solo local; no subir a git)
+PLAN*.md
+**/PLAN*.md
+
 # Project specific
 uploads/
 *.pdf

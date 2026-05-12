@@ -58,6 +58,26 @@ import EstadisticasVisuales from './EstadisticasVisuales';
 const { confirm } = Modal;
 const { Text } = Typography;
 
+/** Coincide con obtenerEstadisticas (pendientes del tablero). */
+const ESTATUS_GRUPO_PENDIENTES_TABLERO = 'Pendiente,Autorizado,Devuelto,Anulado';
+
+const normEstatus = (s) => String(s ?? '').trim().toLowerCase();
+
+/** Refuerzo en cliente: si el API ignora `estatus`, la tabla igual refleja el filtro. */
+const aplicarFiltroEstatusLista = (rows, estatusQuery) => {
+  const list = Array.isArray(rows) ? rows : [];
+  if (estatusQuery === undefined || estatusQuery === null || String(estatusQuery).trim() === '') {
+    return list;
+  }
+  const raw = String(estatusQuery).trim();
+  if (raw.includes(',')) {
+    const allowed = new Set(raw.split(',').map((x) => normEstatus(x)).filter(Boolean));
+    return list.filter((r) => allowed.has(normEstatus(r.estatus)));
+  }
+  const target = normEstatus(raw);
+  return list.filter((r) => normEstatus(r.estatus) === target);
+};
+
 const Dashboard = () => {
   // Detectar URL base para archivos
   const isLocal = window.location.port === '5173' || window.location.hostname === 'localhost';
@@ -171,18 +191,32 @@ const Dashboard = () => {
   const cargarSolicitudes = async (page = 1, limit = pageSize, extraFilters = {}) => {
     setLoading(true);
     try {
-      const params = {
-        pagina: page,
-        limite: limit,
-        estatus: ('estatus' in extraFilters) ? extraFilters.estatus : filtroEstatus,
-        proveedorId: ('proveedorId' in extraFilters) ? extraFilters.proveedorId : filtroProveedor,
-        unidadSolicitante: ('unidadSolicitante' in extraFilters) ? extraFilters.unidadSolicitante : filtroDepartamento,
-        centroCostoId: ('centroCostoId' in extraFilters) ? extraFilters.centroCostoId : filtroCentroCosto
-      };
+      const proveedorIdVal = ('proveedorId' in extraFilters) ? extraFilters.proveedorId : filtroProveedor;
+      const unidadVal = ('unidadSolicitante' in extraFilters) ? extraFilters.unidadSolicitante : filtroDepartamento;
+      const centroVal = ('centroCostoId' in extraFilters) ? extraFilters.centroCostoId : filtroCentroCosto;
+      const estatusVal = ('estatus' in extraFilters) ? extraFilters.estatus : filtroEstatus;
+
+      const params = { pagina: page, limite: limit };
+      if (proveedorIdVal !== undefined && proveedorIdVal !== null && proveedorIdVal !== '') {
+        params.proveedorId = proveedorIdVal;
+      }
+      if (unidadVal !== undefined && unidadVal !== null && unidadVal !== '') {
+        params.unidadSolicitante = unidadVal;
+      }
+      if (centroVal !== undefined && centroVal !== null && centroVal !== '') {
+        params.centroCostoId = centroVal;
+      }
+      if (estatusVal !== undefined && estatusVal !== null && String(estatusVal).trim() !== '') {
+        params.estatus = String(estatusVal).trim();
+      }
 
       const response = await api.get('/solicitudes', { params });
-      setSolicitudes(response.data.solicitudes);
-      setTotalItems(response.data.total);
+      const rawRows = Array.isArray(response.data?.solicitudes)
+        ? response.data.solicitudes
+        : [];
+      const filteredRows = aplicarFiltroEstatusLista(rawRows, params.estatus);
+      setSolicitudes(filteredRows);
+      setTotalItems(filteredRows.length);
       setCurrentPage(page);
       setPageSize(limit);
     } catch (error) {
@@ -202,6 +236,36 @@ const Dashboard = () => {
     } catch (error) {
       message.error('Error al cargar las estadísticas');
     }
+  };
+
+  /** Qué tarjeta del tablero está alineada con el filtro por estatus actual. */
+  const tarjetaDashboardActiva = (() => {
+    if (!filtroEstatus) return 'total';
+    if (filtroEstatus === ESTATUS_GRUPO_PENDIENTES_TABLERO) return 'pendientes';
+    const porValor = { Aprobado: 'aprobadas', Pagado: 'pagadas', Cerrado: 'cerradas' };
+    return porValor[filtroEstatus] || null;
+  })();
+
+  const etiquetaFiltroEstatusActivo = filtroEstatus === ESTATUS_GRUPO_PENDIENTES_TABLERO
+    ? 'Pendientes (tablero)'
+    : filtroEstatus;
+
+  const handleClickTarjetaDashboard = (cardKey) => {
+    if (cardKey === 'total') {
+      setFiltroEstatus('');
+      cargarSolicitudes(1, pageSize, { estatus: '' });
+      return;
+    }
+    const estatusPorTarjeta = {
+      pendientes: ESTATUS_GRUPO_PENDIENTES_TABLERO,
+      aprobadas: 'Aprobado',
+      pagadas: 'Pagado',
+      cerradas: 'Cerrado'
+    };
+    const est = estatusPorTarjeta[cardKey];
+    if (!est) return;
+    setFiltroEstatus(est);
+    cargarSolicitudes(1, pageSize, { estatus: est });
   };
 
   const handleLogout = () => {
@@ -557,15 +621,15 @@ const Dashboard = () => {
 
 
 
-              {/* ACCIONES DEL ADMINISTRADOR */}
+              {/* Aprobar / marcar pagada: solo Administrador. Post‑pago: Admin o Auditor. */}
               {(usuario?.rol?.toLowerCase() === 'administrador' || usuario?.rol?.toLowerCase() === 'auditor') && (
                 <>
-                  {r.estatus?.trim().toLowerCase() === 'autorizado' && (
+                  {r.estatus?.trim().toLowerCase() === 'autorizado' && usuario?.rol?.toLowerCase() === 'administrador' && (
                     <Tooltip title="Aprobar">
                       <Button icon={<CheckOutlined />} size="small" type="primary" onClick={() => handleAprobar(r)} />
                     </Tooltip>
                   )}
-                  {r.estatus?.trim().toLowerCase() === 'aprobado' && (usuario?.rol === 'Administrador' || usuario?.rol === 'Auditor') && (
+                  {r.estatus?.trim().toLowerCase() === 'aprobado' && usuario?.rol?.toLowerCase() === 'administrador' && (
                     <Tooltip title="Marcar como Pagada">
                       <Button icon={<DollarOutlined />} size="small" style={{ backgroundColor: '#52c41a', color: 'white' }} onClick={() => handleAbrirPagar(r)} />
                     </Tooltip>
@@ -713,7 +777,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* CARDS DE ESTADÍSTICAS */}
+      {/* CARDS DE ESTADÍSTICAS — Divs puros (sin antd Card) para garantizar que el onClick funcione */}
       <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
         {[
           { label: 'Total', key: 'total', icon: <TeamOutlined />, color: '#1890ff' },
@@ -721,23 +785,72 @@ const Dashboard = () => {
           { label: 'Aprobadas', key: 'aprobadas', icon: <CheckOutlined />, color: '#52c41a' },
           { label: 'Pagadas', key: 'pagadas', icon: <DollarOutlined />, color: '#13c2c2' },
           { label: 'Cerradas', key: 'cerradas', icon: <CheckOutlined />, color: '#fa8c16' }
-        ].map(item => (
-          <Col key={item.key} xs={12} sm={12} md={8} lg={{ flex: '20%' }} xl={{ flex: '20%' }}>
-            <Card bordered={false} hoverable bodyStyle={{ padding: '12px 16px' }}>
-              <Statistic
-                title={item.label}
-                value={estadisticas[item.key] || 0}
-                prefix={item.icon}
-                valueStyle={{ color: item.color, fontSize: '20px' }}
-              />
-            </Card>
-          </Col>
-        ))}
+        ].map(item => {
+          const isActive = tarjetaDashboardActiva === item.key;
+          return (
+            <Col key={item.key} xs={12} sm={12} md={8} lg={{ flex: '20%' }} xl={{ flex: '20%' }}>
+              <div
+                role="button"
+                tabIndex={0}
+                className="dashboard-stat-card"
+                aria-label={`Filtrar solicitudes: ${item.label}`}
+                aria-pressed={isActive}
+                onClick={() => handleClickTarjetaDashboard(item.key)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleClickTarjetaDashboard(item.key);
+                  }
+                }}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: isActive ? `2px solid ${item.color}` : '2px solid transparent',
+                  background: isDarkMode ? '#1f1f1f' : '#fff',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease',
+                  userSelect: 'none',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <Statistic
+                  title={item.label}
+                  value={estadisticas[item.key] || 0}
+                  prefix={item.icon}
+                  valueStyle={{ color: item.color, fontSize: '20px' }}
+                />
+              </div>
+            </Col>
+          );
+        })}
       </Row>
 
       {/* CUERPO: Tabla de Solicitudes */}
       <Card
-        title="Historial de Solicitudes"
+        title={
+          <Space align="start" wrap size="small">
+            <span>Historial de Solicitudes</span>
+            {filtroEstatus ? (
+              <Tag
+                closable
+                color="processing"
+                onClose={(e) => {
+                  e.preventDefault();
+                  setFiltroEstatus('');
+                  cargarSolicitudes(1, pageSize, { estatus: '' });
+                }}
+              >
+                Filtrando: {etiquetaFiltroEstatusActivo}
+              </Tag>
+            ) : (
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
+                Pulse una tarjeta arriba para filtrar por estatus
+              </Text>
+            )}
+          </Space>
+        }
         extra={
           <Space wrap className="desktop-filters">
             <Popover
@@ -802,6 +915,7 @@ const Dashboard = () => {
                       cargarSolicitudes(1, pageSize, { estatus: est });
                     }}
                   >
+                    <Select.Option value={ESTATUS_GRUPO_PENDIENTES_TABLERO}>PENDIENTES (TABLERO)</Select.Option>
                     <Select.Option value="Pendiente">PENDIENTE</Select.Option>
                     <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
                     <Select.Option value="Aprobado">APROBADO</Select.Option>
@@ -908,6 +1022,7 @@ const Dashboard = () => {
                     cargarSolicitudes(1, pageSize, { estatus: est });
                   }}
                 >
+                  <Select.Option value={ESTATUS_GRUPO_PENDIENTES_TABLERO}>PENDIENTES (TABLERO)</Select.Option>
                   <Select.Option value="Pendiente">PENDIENTE</Select.Option>
                   <Select.Option value="Autorizado">AUTORIZADO</Select.Option>
                   <Select.Option value="Aprobado">APROBADO</Select.Option>

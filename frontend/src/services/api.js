@@ -6,9 +6,11 @@
 
 import axios from 'axios';
 
-// Detectar si estamos en local (puerto 5173 de Vite) o en producción
-const isLocal = window.location.port === '5173' || window.location.hostname === 'localhost';
-const baseURL = isLocal ? `http://${window.location.hostname}:3000/api` : '/api';
+/**
+ * Siempre `/api`: en `vite dev` el proxy reenvía a Node (:3000); en producción Express sirve API en el mismo origen.
+ * Evita fallos si el front corre en otro puerto de Vite o el hostname no es `localhost`.
+ */
+const baseURL = '/api';
 
 const api = axios.create({
     baseURL,

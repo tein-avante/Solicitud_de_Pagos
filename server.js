@@ -100,13 +100,26 @@ app.use('/api/finanzas', reporteFinanzasRoutes ? reporteFinanzasRoutes : (req, r
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Servir la aplicación React (Frontend compilado) en la raíz '/'
-app.use(express.static(path.join(__dirname, 'frontend/dist')));
+// Los assets con hash (JS/CSS) se pueden cachear; el index.html NO (siempre fresco)
+app.use(express.static(path.join(__dirname, 'frontend/dist'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 // También permitir que resuelva la ruta antigua si existe el redireccionamiento
 app.use('/frontend/dist', express.static(path.join(__dirname, 'frontend/dist')));
 
 // Redirigir todas las demás peticiones que no sean API a la aplicación React (React Router)
 app.get('*', (req, res) => {
+    // index.html sin caché para garantizar que siempre se carguen los assets nuevos
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
 });
 
